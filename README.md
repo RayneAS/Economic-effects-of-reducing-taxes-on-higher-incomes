@@ -1,4 +1,4 @@
-# Economic-effects-of-reducing-taxes-on-higher-incomes.
+# Economic-effects-of-reducing-taxes-on-higher-incomes
 This project studies the effects of income tax reforms that reduced tax progressivity across OECD countries. We exploit the staggered timing of major tax reforms and estimate their impacts using the difference-in-differences framework proposed by Callaway and Sant’Anna (2021), comparing treated countries to never-treated OECD members.
 
 The identification of tax reforms and the construction of progressivity measures follow Rubolino and Waldenström (2023). In particular, we use their classification of significant income tax reforms and the associated changes in tax progressivity (Ω), derived from differences in average tax rates faced by top-income earners relative to average earners. The reform dates and institutional tax changes are taken from Table A5 in Rubolino and Waldenström 
