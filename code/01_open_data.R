@@ -124,6 +124,15 @@ gross_savings <- data.table(
 )
 
 
+#open gross fixed capital countries-------------- -----------------------------------------------
+gross_fixed_capital <- data.table(
+  read_csv(
+    file.path(data_dir, "gross_fixed_capital.csv"),
+    skip = 3
+  )
+)
+
+
 #open trade union_density countries-------------- -----------------------------------------------
 union_density <- data.table(
   read_csv(
@@ -137,6 +146,5 @@ unique_year
 working_age_pop <- data.table(
   read_csv(
     file.path(data_dir, "working_age_pop.csv")))
-
 
 
