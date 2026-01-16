@@ -122,7 +122,7 @@ head(gdp_long)
 
 setorder(gdp_long, Country, year)
 
-remove(gdp_pc)
+rm(gdp_pc)
 
 #open trade countries-------------- -----------------------------------------------
 trade <- data.table(
@@ -158,7 +158,7 @@ head(trade_long)
 
 setorder(trade_long, Country, year)
 
-remove(trade)
+rm(trade)
 
 #open trade countries-------------- -----------------------------------------------
 tax_revenue <- data.table(
@@ -193,7 +193,7 @@ head(tax_revenue_long)
 
 setorder(tax_revenue_long, Country, year)
 
-remove(tax_revenue)
+rm(tax_revenue)
 
 
 #open gross domestic savings countries-------------- -----------------------------------------------
@@ -207,7 +207,7 @@ gross_savings <- data.table(
 head(gross_savings)
 
 setnames(gross_savings, c("Country Name", "Country Code", "Indicator Name"), 
-         c("Country", "Code", "tax_revenue_to_gdp"))
+         c("Country", "Code", "gross_savings"))
 
 gross_savings$"Indicator Code" <- NULL
 
@@ -229,7 +229,7 @@ head(gross_savings_long)
 
 setorder(gross_savings_long, Country, year)
 
-remove(gross_savings)
+rm(gross_savings)
 
 
 #open gross fixed capital countries-------------- -----------------------------------------------
@@ -265,7 +265,72 @@ head(gross_fixed_capital_long)
 
 setorder(gross_fixed_capital_long, Country, year)
 
-remove(gross_fixed_capital)
+rm(gross_fixed_capital)
+
+#open Bank Depositis to GDP countries-------------- -----------------------------------------------
+
+bank_depositis_to_gdp <- data.table(
+  read_csv(
+    file.path(data_dir, "bank_depositis_to_gdp.csv"),
+    locale = locale(encoding = "UTF-8")
+  )
+)
+
+bank_depositis_to_gdp <- data.table(
+  read_csv(
+    file.path(data_dir, "bank_depositis_to_gdp.csv")))
+
+head(bank_depositis_to_gdp)
+
+setnames(bank_depositis_to_gdp, c("Country Name", "Country Code", "Series Name"), 
+         c("Country", "Code", "bank_depositis_to_gdp"))
+
+bank_depositis_to_gdp$"Series Code" <- NULL
+
+#clean year columns
+old_names <- names(bank_depositis_to_gdp)
+
+year_cols <- grep("^\\d{4} \\[YR\\d{4}\\]$", old_names, value = TRUE)
+
+setnames(bank_depositis_to_gdp, year_cols, sub("^([0-9]{4}).*$", "\\1", year_cols))
+
+year_cols <- grep("^[0-9]{4}$", names(bank_depositis_to_gdp), value = TRUE)
+
+
+unique <- unique(bank_depositis_to_gdp$Country)
+unique
+
+# reshape to long
+bank_depositis_to_gdp_long <- melt(
+  bank_depositis_to_gdp,
+  id.vars = c("Country", "Code"),
+  measure.vars = year_cols,
+  variable.name = "year",
+  value.name = "bank_depositis_to_gdp",
+  variable.factor = FALSE
+)
+
+names(bank_depositis_to_gdp_long)
+
+bank_depositis_to_gdp_long <- as.data.table(bank_depositis_to_gdp_long)
+
+bank_depositis_to_gdp_long <- bank_depositis_to_gdp_long[!is.na(Country)]
+
+unique <- unique(bank_depositis_to_gdp_long$Country)
+unique
+
+
+head(bank_depositis_to_gdp_long)
+
+setorder(bank_depositis_to_gdp_long, Country, year)
+
+rm(bank_depositis_to_gdp)
+
+
+bank_depositis_to_gdp_long <- bank_depositis_to_gdp_long[,
+                                bank_depositis_to_gdp:= 
+                                  as.numeric(bank_depositis_to_gdp)/100]
+
 
 #open trade union_density countries-------------- -----------------------------------------------
 union_density <- data.table(
@@ -342,7 +407,9 @@ not_oecd <- c(
 )
 
 union_density <- union_density[!Country %in% not_oecd]
-union_density <- union_density[, oecd:= 1]
+
+setorder(union_density, Country, year)
+
 
 #open working age population countries-------------- -----------------------------------------------
 working_age_pop <- data.table(
@@ -428,6 +495,9 @@ working_age_pop[, c("STRUCTURE", "STRUCTURE_ID", "ACTION", "MEASURE",
 unique <- unique(working_age_pop$Country)
 unique
 
+unique <- unique(working_age_pop$Country)
+unique
+
 #drop not oecd countries and others
 not_oecd <- c(
   "Argentina",
@@ -451,9 +521,53 @@ not_oecd <- c(
 )
 
 working_age_pop <- working_age_pop[!Country %in% not_oecd]
-working_age_pop <- working_age_pop[, oecd:= 1]
 
 setorder(working_age_pop, Country, year)
 
+working_age_pop <- working_age_pop[, oecd:= 1]
 
+head(working_age_pop)
+
+#drop years
+years_out <- 1950:1959
+years_out
+
+working_age_pop <- working_age_pop[!year %in% years_out]
+
+
+#Merge databases to get our panel with control variables--------------------------------------
+panel_data <- Reduce(
+  function(x, y) merge(x, y, by = c("Country", "Code", "year"), all = TRUE),
+  list(
+    gdp_long,
+    trade_long,
+    tax_revenue_long,
+    gross_savings_long,
+    gross_fixed_capital_long,
+    bank_depositis_to_gdp_long,
+    union_density,
+    working_age_pop
+  )
+)
+
+
+
+panel_data <- as.data.table(panel_data) 
+panel_data[, oecd := fifelse(is.na(oecd), 0L, as.integer(oecd))]
+
+panel_oecd <- panel_data[oecd == 1]
+
+unique <-unique(panel_oecd$year) 
+unique
+
+#Database checks---------------------------------------------------------------------------
+
+panel_oecd[, .N, by=.(Country, Code, year)][N>1]
+
+class(panel_oecd$year)
+panel_oecd[is.na(year)]
+
+panel_oecd[, uniqueN(oecd)]
+panel_oecd[, uniqueN(Code)]
+panel_oecd[, sort(unique(Country))]
 
