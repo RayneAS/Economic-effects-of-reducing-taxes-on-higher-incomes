@@ -534,6 +534,153 @@ years_out
 
 working_age_pop <- working_age_pop[!year %in% years_out]
 
+#open patent data -------------- -----------------------------------------------
+
+patent <- data.table(
+  read_csv(
+    file.path(data_dir, "patents.csv")))
+
+
+head(patent)
+
+unique <- unique(patent$ACTION)
+unique
+
+unique <- unique(patent$MEASURE)
+unique
+
+unique <- unique(patent$TIME_PERIOD)
+unique
+
+unique <- unique(patent$UNIT_MEASURE)
+unique
+
+unique <- unique(patent$`Unit of measure`)
+unique
+
+unique <- unique(patent$`Time period`)
+unique
+
+unique <- unique(patent$OBS_STATUS)
+unique
+
+unique <- unique(patent$`Observation status`)
+unique
+
+unique <- unique(patent$Decimals)
+unique
+
+unique <- unique(patent$DECIMALS)
+unique
+
+unique <- unique(patent$`Unit multiplier`)
+unique
+
+unique <- unique(patent$UNIT_MULT)
+unique
+
+unique <- unique(patent$`Observation value`)
+unique
+
+unique <- unique(patent$Measure)
+unique
+
+unique <- unique(patent$`Time horizon`)
+unique
+
+unique <- unique(patent$TIME_HORIZ)
+unique
+
+
+setnames(patent, c("Reference area", "REF_AREA", "OBS_VALUE", "TIME_PERIOD"), 
+         c("Country", "Code", "patent","year"))
+
+
+patent[, c("STRUCTURE", "STRUCTURE_ID", "ACTION",
+           "UNIT_MEASURE", "Unit of measure","Time period",
+           "OBS_STATUS","Observation status","Decimals",
+           "DECIMALS", "Unit multiplier", "UNIT_MULT",
+           "Observation value","STRUCTURE_NAME",
+            "FREQ","Frequency of observation", "Regional patent office",
+           "Technology domain", "PAT", "TECH") := NULL]
+
+colnames(patent)
+
+unique <- unique(patent$Country)
+unique
+
+unique <- unique(patent$Country)
+unique
+
+#oecd countries 
+
+oecd_countries <- c(
+  "Australia", "Austria", "Belgium", "Canada", "Chile", "Colombia",
+  "Costa Rica", "Czechia", "Denmark", "Estonia", "Finland", "France",
+  "Germany", "Greece", "Hungary", "Iceland", "Ireland", "Israel",
+  "Italy", "Japan", "Korea", "Latvia", "Lithuania", "Luxembourg",
+  "Mexico", "Netherlands", "New Zealand", "Norway", "Poland",
+  "Portugal", "Slovak Republic", "Slovenia", "Spain", "Sweden",
+  "Switzerland", "Türkiye", "United Kingdom", "United States"
+)
+
+not_oecd <- setdiff(unique(patent$Country), oecd_countries)
+
+patent <- patent[Country %in% oecd_countries]
+
+unique <- unique(patent$Country)
+unique
+
+#Open Stock capitalization data --------------------------------------------
+stocks_capt <- data.table(
+  read_csv(
+    file.path(data_dir, "stocks_capitalization_to_gdp.csv")))
+
+
+colnames(stocks_capt)
+
+setnames(stocks_capt, c("Country Name", "Country Code"), 
+         c("Country", "Code"))
+
+#clean year columns
+
+old_names <- names(stocks_capt)
+
+year_cols <- grep("^\\d{4} \\[YR\\d{4}\\]$", old_names, value = TRUE)
+
+setnames(stocks_capt, year_cols, sub("^([0-9]{4}).*$", "\\1", year_cols))
+
+year_cols <- grep("^[0-9]{4}$", names(stocks_capt), value = TRUE)
+
+colnames(stocks_capt)
+
+
+stocks_capt[, c("Series Name", "Series Code") := NULL]
+
+
+unique <- unique(stocks_capt$Country)
+unique
+
+
+#oecd countries 
+
+oecd_countries <- c(
+  "Australia", "Austria", "Belgium", "Canada", "Chile", "Colombia",
+  "Costa Rica", "Czechia", "Denmark", "Estonia", "Finland", "France",
+  "Germany", "Greece", "Hungary", "Iceland", "Ireland", "Israel",
+  "Italy", "Japan", "Korea", "Latvia", "Lithuania", "Luxembourg",
+  "Mexico", "Netherlands", "New Zealand", "Norway", "Poland",
+  "Portugal", "Slovak Republic", "Slovenia", "Spain", "Sweden",
+  "Switzerland", "Türkiye", "United Kingdom", "United States"
+)
+
+not_oecd <- setdiff(unique(stocks_capt$Country), oecd_countries)
+
+stocks_capt <- stocks_capt[Country %in% oecd_countries]
+
+unique <- unique(stocks_capt$Country)
+unique
+
 
 #Merge databases to get our panel with control variables--------------------------------------
 panel_data <- Reduce(
@@ -549,6 +696,7 @@ panel_data <- Reduce(
     working_age_pop
   )
 )
+
 
 
 
@@ -571,3 +719,5 @@ panel_oecd[, uniqueN(oecd)]
 panel_oecd[, uniqueN(Code)]
 panel_oecd[, sort(unique(Country))]
 
+#rm(panel_data)
+#rm(panel_oecd)
