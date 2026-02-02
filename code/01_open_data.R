@@ -304,9 +304,9 @@ setorder(bank_deposits_to_gdp_long, Country, year)
 rm(bank_deposits_to_gdp)
 
 
-bank_deposits_to_gdp_long <- bank_deposits_to_gdp_long[,
-                                      bank_deposits_to_gdp:= 
-                                      as.numeric(bank_deposits_to_gdp)/100]
+# bank_deposits_to_gdp_long <- bank_deposits_to_gdp_long[,
+#                                       bank_deposits_to_gdp:= 
+#                                       as.numeric(bank_deposits_to_gdp)/100]
 
 # 7 - open trade union_density countries----------------------------------------
 union_density <- data.table(
