@@ -42,6 +42,12 @@ oecd_countries <- c(
   "Switzerland","Türkiye","United Kingdom","United States"
 )
 
+oecd_codes <- c(
+  "AUS","AUT","BEL","CAN","CHL","COL","CRI","CZE","DNK","EST","FIN","FRA","DEU","GRC",
+  "HUN","ISL","IRL","ISR","ITA","JPN","KOR","LVA","LTU","LUX","MEX","NLD","NZL","NOR",
+  "POL","PRT","SVK","SVN","ESP","SWE","CHE","TUR","GBR","USA"
+)
+
 
 # 1 - open gdp data------------------------------------------------------------------
 gdp_pc <- data.table(
@@ -65,7 +71,7 @@ year_cols <- grep("^[0-9]{4}$", names(gdp_pc), value = TRUE)
 
 
 # reshape to long
-gdp_long <- melt(
+gdp_long <- data.table::melt(
   gdp_pc,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -74,11 +80,16 @@ gdp_long <- melt(
   variable.factor = FALSE
 )
 
+
+gdp_long <- as.data.table(gdp_long)
+gdp_long[, year := as.integer(year)] 
+
 head(gdp_long)
 
 setorder(gdp_long, Country, year)
 
 rm(gdp_pc)
+
 
 # 2 - open trade data ---------------------------------------------------------------
 trade <- data.table(
@@ -102,7 +113,7 @@ year_cols <- grep("^[0-9]{4}$", names(trade), value = TRUE)
 
 
 # reshape to long
-trade_long <- melt(
+trade_long <- data.table::melt(
   trade,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -110,6 +121,10 @@ trade_long <- melt(
   value.name = "trade",
   variable.factor = FALSE
 )
+
+trade_long <- as.data.table(trade_long)
+
+trade_long[, year := as.integer(year)]
 
 head(trade_long)
 
@@ -138,7 +153,7 @@ year_cols <- grep("^[0-9]{4}$", names(tax_revenue), value = TRUE)
 
 
 # reshape to long
-tax_revenue_long <- melt(
+tax_revenue_long <- data.table::melt(
   tax_revenue,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -146,6 +161,10 @@ tax_revenue_long <- melt(
   value.name = "tax_revenue",
   variable.factor = FALSE
 )
+
+tax_revenue_long <- as.data.table(tax_revenue_long)
+
+tax_revenue_long[, year := as.integer(year)]
 
 head(tax_revenue_long)
 
@@ -173,7 +192,7 @@ year_cols <- grep("^[0-9]{4}$", names(gross_savings), value = TRUE)
 
 
 # reshape to long
-gross_savings_long <- melt(
+gross_savings_long <- data.table::melt(
   gross_savings,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -181,6 +200,11 @@ gross_savings_long <- melt(
   value.name = "gross_savings",
   variable.factor = FALSE
 )
+
+gross_savings_long <- as.data.table(gross_savings_long)
+
+gross_savings_long[, year := as.integer(year)]
+
 
 head(gross_savings_long)
 
@@ -209,7 +233,7 @@ gross_fixed_capital <- gross_fixed_capital[,
 year_cols <- grep("^[0-9]{4}$", names(gross_fixed_capital), value = TRUE)
 
 # reshape to long
-gross_fixed_capital_long <- melt(
+gross_fixed_capital_long <- data.table::melt(
   gross_fixed_capital,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -218,13 +242,18 @@ gross_fixed_capital_long <- melt(
   variable.factor = FALSE
 )
 
+gross_fixed_capital_long <- as.data.table(gross_fixed_capital_long)
+
+gross_fixed_capital_long[, year := as.integer(year)]
+
+
 head(gross_fixed_capital_long)
 
 setorder(gross_fixed_capital_long, Country, year)
 
 rm(gross_fixed_capital)
 
-# 6 - open Bank Deposits data --------------------------------------------------
+# 6 - open bank deposits data --------------------------------------------------
 bank_deposits_to_gdp <- data.table(
   read_csv(
     file.path(data_dir, "bank_deposits_to_gdp.csv"),
@@ -253,7 +282,7 @@ year_cols <- grep("^[0-9]{4}$", names(bank_deposits_to_gdp), value = TRUE)
 
 
 # reshape to long
-bank_deposits_to_gdp_long <- melt(
+bank_deposits_to_gdp_long <- data.table::melt(
   bank_deposits_to_gdp,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -264,7 +293,9 @@ bank_deposits_to_gdp_long <- melt(
 
 
 bank_deposits_to_gdp_long <- as.data.table(bank_deposits_to_gdp_long)
-bank_deposits_to_gdp_long <- bank_deposits_to_gdp_long[!is.na(Country)]
+
+bank_deposits_to_gdp_long[, year := as.integer(year)]
+
 
 head(bank_deposits_to_gdp_long)
 
@@ -293,6 +324,7 @@ union_density <- union_density[, .SD,
                                .SDcols = c("Country", "Code", "trade_union",
                                            "year")]
 
+union_density[, year := as.integer(year)]
 
 
 setorder(union_density, Country, year)
@@ -313,13 +345,11 @@ setnames(working_age_pop, c("Reference area", "REF_AREA", "OBS_VALUE",
 working_age_pop <- working_age_pop[, .SD,
                     .SDcols = c("Country", "Code", "working_age_pop","year")]
 
+working_age_pop[, year := as.integer(year)]
 
 
 setorder(working_age_pop, Country, year)
 
-#create oecd dummy
-working_age_pop <- working_age_pop[, 
-                              oecd:= as.integer(Country %in% oecd_countries)]
 
 #drop years
 years_out <- 1950:1959
@@ -341,10 +371,13 @@ setnames(patent, c("Reference area", "REF_AREA", "OBS_VALUE", "TIME_PERIOD"),
 patent <- patent[, .SD,
                  .SDcols = c("Country", "Code", "patent","year")]
 
+patent[, year := as.integer(year)]
+
+
 setorder(patent, Country, year)
 
 
-# 10 - Open Stock capitalization data ------------------------------------------------
+# 10 - Open stock capitalization data ------------------------------------------------
 stocks_capt <- data.table(
   read_csv(
     file.path(data_dir, "stocks_capitalization_to_gdp.csv"),
@@ -371,7 +404,7 @@ stocks_capt[, c("Series Name", "Series Code") := NULL]
 
 
 # reshape to long
-stocks_capt_long <- melt(
+stocks_capt_long <- data.table::melt(
   stocks_capt,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -380,13 +413,18 @@ stocks_capt_long <- melt(
   variable.factor = FALSE
 )
 
+stocks_capt_long <- as.data.table(stocks_capt_long)
+
+stocks_capt_long[, year := as.integer(year)]
+
+
 head(stocks_capt_long)
 
 setorder(stocks_capt_long, Country, year)
 
 rm(stocks_capt)
 
-# 11 - Open Stock Trade data ------------------------------------------------
+# 11 - Open stock Trade data ------------------------------------------------
 stocks_trade <- data.table(
   read_csv(
     file.path(data_dir, "stocks_trade_to_gdp.csv"),
@@ -407,7 +445,7 @@ stocks_trade[, c("Indicator Name", "Indicator Code","...70") := NULL]
 year_cols <- grep("^[0-9]{4}$", names(stocks_trade), value = TRUE)
 
 #reshape to long
-stocks_trade_long <- melt(
+stocks_trade_long <- data.table::melt(
   stocks_trade,
   id.vars = c("Country", "Code"),
   measure.vars = year_cols,
@@ -416,6 +454,9 @@ stocks_trade_long <- melt(
   variable.factor = FALSE
 )
 
+stocks_trade_long <- as.data.table(stocks_trade_long)
+
+stocks_trade_long[, year := as.integer(year)]
 
 setorder(stocks_trade_long, Country, year)
 head(stocks_trade_long)
@@ -423,7 +464,7 @@ head(stocks_trade_long)
 rm(stocks_trade)
 
 
-# 12 - Open Government Gross Debt data ------------------------------------------------
+# 12 - Open government gross debt data ------------------------------------------------
 gov_gross_debt <- data.table(
   read_csv(
     file.path(data_dir, "government_gross_debt.csv"),
@@ -443,27 +484,48 @@ gov_gross_debt <- gov_gross_debt[, .SD,
 
 head(gov_gross_debt)
 
+gov_gross_debt[, year := as.integer(year)]
+
 setorder(gov_gross_debt, Country, year)
+sort(unique(gov_gross_debt$Code))
+sort(unique(gov_gross_debt$Country))
 
 
 #Merge databases --------------------------------------------------------------
+
+#check
+setdiff(oecd_codes, sort(unique(gdp_long$Code)))
+setdiff(oecd_codes, sort(unique(trade_long$Code)))
+setdiff(oecd_codes, sort(unique(tax_revenue_long$Code)))
+setdiff(oecd_codes, sort(unique(gross_savings_long$Code)))
+setdiff(oecd_codes, sort(unique(gross_fixed_capital_long$Code)))
+setdiff(oecd_codes, sort(unique(bank_deposits_to_gdp_long$Code)))
+setdiff(oecd_codes, sort(unique(union_density$Code)))
+setdiff(oecd_codes, sort(unique(working_age_pop$Code)))
+setdiff(oecd_codes, sort(unique(patent$Code)))
+setdiff(oecd_codes, sort(unique(stocks_capt_long$Code)))
+setdiff(oecd_codes, sort(unique(stocks_trade_long$Code)))
+setdiff(oecd_codes, sort(unique(gov_gross_debt$Code)))
+
+#keep country in only one database
+country_map <- unique(gdp_long[, .(Code, Country)])
+drop_country <- function(dt) dt[, Country := NULL]
+
+#merge using code and year
+dt_list <- lapply(list(
+  gdp_long, trade_long, tax_revenue_long, gross_savings_long,
+  gross_fixed_capital_long, bank_deposits_to_gdp_long, union_density,
+  working_age_pop, patent, stocks_capt_long, stocks_trade_long, gov_gross_debt
+), function(dt) drop_country(copy(dt)))
+
 panel_data <- Reduce(
-  function(x, y) merge(x, y, by = c("Country", "Code", "year"), all = TRUE),
-  list(
-    gdp_long,
-    trade_long,
-    tax_revenue_long,
-    gross_savings_long,
-    gross_fixed_capital_long,
-    bank_deposits_to_gdp_long,
-    union_density,
-    working_age_pop,
-    patent,
-    stocks_capt_long,
-    stocks_trade_long,
-    gov_gross_debt
-  )
+  function(x, y) merge(x, y, by = c("Code", "year"), all = TRUE),
+  dt_list
 )
+
+panel_data <- merge(panel_data, country_map, by = "Code", all.x = TRUE)
+setcolorder(panel_data, c("Country", "Code", "year",
+                          setdiff(names(panel_data), c("Country","Code","year"))))
 
 #remove old data
 rm(gdp_long,
@@ -479,34 +541,47 @@ rm(gdp_long,
   stocks_trade_long,
   gov_gross_debt)
 
-
-class(panel_data)
+stopifnot(is.integer(panel_data$year))
 
 panel_data <- as.data.table(panel_data) 
-panel_data[, oecd := fifelse(is.na(oecd), 0L, as.integer(oecd))]
+
+panel_data[, oecd := as.integer(Code %in% oecd_codes)]
 
 setorder(panel_data, Country, year)
 
-View(panel_data[, list(Country, year, oecd)])
+#View(panel_data[, list(Country, year, oecd)])
 
 
 #define panel with oecd countries
 panel_oecd <- panel_data[oecd == 1]
 
-unique <-unique(panel_oecd$year) 
-unique
+unique_years <- sort(unique(panel_oecd$year))
+unique_years
+unique_countries <- sort(unique(panel_oecd$Country))
+unique_countries
 
-unique <-unique(panel_oecd$Country)
-unique
+unique_codes <- sort(unique(panel_oecd$Code))
+unique_codes
+
+rm(dt_list)
+rm(country_map)
 
 #Database checks----------------------------------------------------------------
+setdiff(oecd_countries, sort(unique(panel_data$Country)))
+sort(unique(panel_data[oecd == 1, Country]))
+
 
 panel_oecd[, .N, by=.(Country, Code, year)][N>1]
 
-class(panel_oecd$year)
 panel_oecd[is.na(year)]
 
 panel_oecd[, uniqueN(oecd)]
 panel_oecd[, uniqueN(Code)]
 panel_oecd[, sort(unique(Country))]
+panel_oecd[, ("oecd") := NULL]
 
+
+#save data
+fwrite(panel_oecd,
+       file.path(data_dir, paste0("control_variables_oecd_countries.csv")),
+       sep = ",")
