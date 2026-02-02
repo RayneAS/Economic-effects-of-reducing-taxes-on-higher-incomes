@@ -1,83 +1,25 @@
 rm(list = ls())
 gc()
 
-# # Install packages
-# packages <- c(
-#   "dplyr",
-#   "data.table",
-#   "tictoc",
-#   "haven",
-#   "questionr",
-#   "tidyverse",
-#   "ggplot2",
-#   "ggthemes",
-#   "cowplot",
-#   "Hmisc",
-#   "ggpubr",
-#   "summarytools",
-#   "kableExtra",
-#   "psych",
-#   "survey",
-#   "readxl",
-#   "readr",
-#   "plm",
-#   "lmtest",
-#   "feather",
-#   "xtable",
-#   "geobr",
-#   "stringr",
-#   "stringdist",
-#   "magrittr",
-#   "devtools",
-#   "SDMTools",
-#   "rlang",
-#   "reshape2",
-#   "knitr"
-# )
-# 
-# installed <- rownames(installed.packages())
-# to_install <- setdiff(packages, installed)
-# 
-# if (length(to_install) > 0) {
-#   install.packages(to_install, dependencies = TRUE)
-# }
-# 
-# invisible(lapply(packages, library, character.only = TRUE))
+#Install packages
+packages <- c(
+  "data.table",
+  "readr"
+)
 
+installed <- rownames(installed.packages())
+to_install <- setdiff(packages, installed)
+
+if (length(to_install) > 0) {
+  install.packages(to_install, dependencies = TRUE)
+}
+
+invisible(lapply(packages, library, character.only = TRUE))
 
 #PACKAGES USED
-library(dplyr)
 library(data.table)
-library(tictoc)
-library(haven)
-library(questionr)
-library(tidyverse)
-library(ggplot2)
-library(ggthemes)
-library(cowplot)
-library(Hmisc)
-library(questionr)
-library(ggpubr)
-library(summarytools)
-library(kableExtra)
-library(psych)
-library(survey)
-library(readxl)
 library(readr)
-library(plm)
-library(lmtest)
-library (feather)
-library(xtable)
-library(geobr)
-library(stringr)
-library(stringdist)
-library(magrittr)
-library(devtools)
-library(rlang)
-library(reshape2)
-library(xtable)
-library(knitr)
-library(kableExtra)
+
 
 # Set user
 user = "Rayne"
@@ -94,7 +36,8 @@ code_dir <- file.path(working_dir, "code")
 gdp_pc <- data.table(
   read_csv(
     file.path(data_dir, "gdp_per_capita.csv"),
-    skip = 3
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
   )
 )
 
@@ -128,7 +71,8 @@ rm(gdp_pc)
 trade <- data.table(
   read_csv(
     file.path(data_dir, "trade.csv"),
-    skip = 3
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
   )
 )
 
@@ -164,7 +108,8 @@ rm(trade)
 tax_revenue <- data.table(
   read_csv(
     file.path(data_dir, "tax_revenue.csv"),
-    skip = 3
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
   )
 )
 
@@ -200,7 +145,8 @@ rm(tax_revenue)
 gross_savings <- data.table(
   read_csv(
     file.path(data_dir, "gross_dom_savings.csv"),
-    skip = 3
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
   )
 )
 
@@ -236,7 +182,8 @@ rm(gross_savings)
 gross_fixed_capital <- data.table(
   read_csv(
     file.path(data_dir, "gross_fixed_capital.csv"),
-    skip = 3
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
   )
 )
 
@@ -272,13 +219,11 @@ rm(gross_fixed_capital)
 bank_depositis_to_gdp <- data.table(
   read_csv(
     file.path(data_dir, "bank_depositis_to_gdp.csv"),
-    locale = locale(encoding = "UTF-8")
+    locale = locale(encoding = "UTF-8"),
+    na = c("", "NA", "N/A", "..")
   )
 )
 
-bank_depositis_to_gdp <- data.table(
-  read_csv(
-    file.path(data_dir, "bank_depositis_to_gdp.csv")))
 
 head(bank_depositis_to_gdp)
 
@@ -335,7 +280,8 @@ bank_depositis_to_gdp_long <- bank_depositis_to_gdp_long[,
 #open trade union_density countries-------------- -----------------------------------------------
 union_density <- data.table(
   read_csv(
-    file.path(data_dir, "union_density.csv")))
+    file.path(data_dir, "union_density.csv"),
+    na = c("", "NA", "N/A", "..")))
 
 
 head(union_density)
@@ -414,7 +360,7 @@ setorder(union_density, Country, year)
 #open working age population countries-------------- -----------------------------------------------
 working_age_pop <- data.table(
   read_csv(
-    file.path(data_dir, "working_age_pop.csv")))
+    file.path(data_dir, "working_age_pop.csv"), na = c("", "NA", "N/A", "..")))
 
 
 head(working_age_pop)
@@ -538,7 +484,7 @@ working_age_pop <- working_age_pop[!year %in% years_out]
 
 patent <- data.table(
   read_csv(
-    file.path(data_dir, "patents.csv")))
+    file.path(data_dir, "patents.csv"), na = c("", "NA", "N/A", "..")))
 
 
 head(patent)
@@ -582,15 +528,6 @@ unique
 unique <- unique(patent$`Observation value`)
 unique
 
-unique <- unique(patent$Measure)
-unique
-
-unique <- unique(patent$`Time horizon`)
-unique
-
-unique <- unique(patent$TIME_HORIZ)
-unique
-
 
 setnames(patent, c("Reference area", "REF_AREA", "OBS_VALUE", "TIME_PERIOD"), 
          c("Country", "Code", "patent","year"))
@@ -631,10 +568,13 @@ patent <- patent[Country %in% oecd_countries]
 unique <- unique(patent$Country)
 unique
 
-#Open Stock capitalization data --------------------------------------------
+#Open Stock capitalization data ------------------------------------------------
 stocks_capt <- data.table(
   read_csv(
-    file.path(data_dir, "stocks_capitalization_to_gdp.csv")))
+    file.path(data_dir, "stocks_capitalization_to_gdp.csv"),
+    na = c("", "NA", "N/A", "..")
+    )
+  )
 
 
 colnames(stocks_capt)
@@ -680,6 +620,130 @@ stocks_capt <- stocks_capt[Country %in% oecd_countries]
 
 unique <- unique(stocks_capt$Country)
 unique
+
+
+# reshape to long
+stocks_capt_long <- melt(
+  stocks_capt,
+  id.vars = c("Country", "Code"),
+  measure.vars = year_cols,
+  variable.name = "year",
+  value.name = "stocks_capt",
+  variable.factor = FALSE
+)
+
+head(stocks_capt_long)
+
+setorder(stocks_capt_long, Country, year)
+
+rm(stocks_capt)
+
+
+#Open Stock Trade data ------------------------------------------------
+stocks_trade <- data.table(
+  read_csv(
+    file.path(data_dir, "stocks_trade_to_gdp.csv"),
+    skip = 3,
+    na = c("", "NA", "N/A", "..")
+  )
+)
+
+colnames(stocks_trade)
+
+setnames(stocks_trade, c("Country Name", "Country Code"), 
+         c("Country", "Code"))
+
+head(stocks_trade)
+
+
+stocks_trade[, c("Indicator Name", "Indicator Code") := NULL]
+
+
+unique <- unique(stocks_trade$Country)
+unique
+
+#oecd countries 
+
+oecd_countries <- c(
+  "Australia", "Austria", "Belgium", "Canada", "Chile", "Colombia",
+  "Costa Rica", "Czechia", "Denmark", "Estonia", "Finland", "France",
+  "Germany", "Greece", "Hungary", "Iceland", "Ireland", "Israel",
+  "Italy", "Japan", "Korea", "Latvia", "Lithuania", "Luxembourg",
+  "Mexico", "Netherlands", "New Zealand", "Norway", "Poland",
+  "Portugal", "Slovak Republic", "Slovenia", "Spain", "Sweden",
+  "Switzerland", "Türkiye", "United Kingdom", "United States"
+)
+
+not_oecd <- setdiff(unique(stocks_trade$Country), oecd_countries)
+
+stocks_trade <- stocks_trade[Country %in% oecd_countries]
+
+unique <- unique(stocks_trade$Country)
+unique
+
+#reshape to long
+stocks_trade_long <- melt(
+  stocks_trade,
+  id.vars = c("Country", "Code"),
+  measure.vars = year_cols,
+  variable.name = "year",
+  value.name = "stocks_trade",
+  variable.factor = FALSE
+)
+
+head(stocks_trade_long)
+
+setorder(stocks_trade_long, Country, year)
+
+rm(stocks_trade)
+
+
+#Open Government Gross Debt data ------------------------------------------------
+gov_gross_debt <- data.table(
+  read_csv(
+    file.path(data_dir, "government_gross_debt.csv"),
+    na = c("", "NA", "N/A", "..")
+  )
+)
+
+colnames(gov_gross_debt)
+
+
+gov_gross_debt <- gov_gross_debt[, .SD,
+                                 .SDcols = c("REF_AREA", "Reference area",
+                                             "TIME_PERIOD", "OBS_VALUE")]
+
+
+setnames(gov_gross_debt, c("Reference area", "REF_AREA","TIME_PERIOD", "OBS_VALUE"), 
+         c("Country", "Code", "year", "gov_gross_debt"))
+
+head(gov_gross_debt)
+
+unique <- unique(gov_gross_debt$Country)
+unique
+
+#oecd countries 
+
+oecd_countries <- c(
+  "Australia", "Austria", "Belgium", "Canada", "Chile", "Colombia",
+  "Costa Rica", "Czechia", "Denmark", "Estonia", "Finland", "France",
+  "Germany", "Greece", "Hungary", "Iceland", "Ireland", "Israel",
+  "Italy", "Japan", "Korea", "Latvia", "Lithuania", "Luxembourg",
+  "Mexico", "Netherlands", "New Zealand", "Norway", "Poland",
+  "Portugal", "Slovak Republic", "Slovenia", "Spain", "Sweden",
+  "Switzerland", "Türkiye", "United Kingdom", "United States"
+)
+
+not_oecd <- setdiff(unique(gov_gross_debt$Country), oecd_countries)
+
+gov_gross_debt <- gov_gross_debt[Country %in% oecd_countries]
+
+unique <- unique(gov_gross_debt$Country)
+unique
+
+head(gov_gross_debt)
+
+setorder(gov_gross_debt, Country, year)
 
 
 #Merge databases to get our panel with control variables--------------------------------------
