@@ -109,6 +109,9 @@ omega <- omega[, .SD,
 
 rubolino <- merge(dt2, omega, by = c("Year","Code","Country"), all.x = TRUE)
 
+rubolino <- rubolino[, ("Code") := NULL]
+
+
 setorder(rubolino, Country, Year)
 
 
@@ -120,11 +123,16 @@ unique_countries
 unique_countries <- sort(unique(panel_oecd$Country))
 unique_countries
 
+setnames(rubolino, "Year", "year")
+
+
 # 4 - Income database (World Inequality Database) -----------------------------
 
 dt_income <- data.table(
   read_csv(
     file.path(data_dir, "income_share1_WID.csv")))
+
+dt_income <- dt_income[, ("Code") := NULL]
 
 setorder(dt_income, Country, year)
 
@@ -149,10 +157,24 @@ dt_income[, Country := fcase(
 
 # 5 - Merge databases ----------------------------------------------------------
 
-setkey(panel_oecd, Country, year)
-setkey(rubolino,  Country, Year)
+panel_data <- merge(panel_oecd, dt_income, by = c("Country", "year"), 
+                    all.x = TRUE)
 
-panel_merged <- rubolino[panel_oecd] 
+
+setkey(panel_data, Country, year)
+setkey(rubolino,  Country, year)
+
+panel_merged <- rubolino[panel_data] 
 
 unique_countries <- sort(unique(panel_merged$Country))
 unique_countries
+
+colnames(panel_merged)
+
+
+#checks
+nrow(panel_data)
+nrow(panel_merged)
+
+# number of NA in rubolino by country
+panel_merged[is.na(Omega), .N, by = Country][order(-N)]
