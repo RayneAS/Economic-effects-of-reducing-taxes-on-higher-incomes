@@ -4,7 +4,9 @@ gc()
 #Install packages
 packages <- c(
   "data.table",
-  "readr"
+  "readr",
+  "ggplot2",
+  "scales"
 )
 
 installed <- rownames(installed.packages())
@@ -19,6 +21,8 @@ invisible(lapply(packages, library, character.only = TRUE))
 #PACKAGES USED
 library(data.table)
 library(readr)
+library(ggplot2)
+library(scales)
 
 
 # Set user
@@ -490,6 +494,64 @@ setorder(gov_gross_debt, Country, year)
 sort(unique(gov_gross_debt$Code))
 sort(unique(gov_gross_debt$Country))
 
+
+# 13 - Open and save income data ------------------------------------------------
+
+#source: World Inequality Database (WID.world)
+
+dt_income <- data.table(
+  read.csv(
+    file.path(data_dir, "data_incshare_countries.csv")))
+
+colnames(dt_income)
+
+
+#sdiinc992j Share da renda disponível do top 1%
+#sdiinc999j Share da renda disponível do top 0.1%
+#sptinc992j Renda média pré-imposto do top 1%
+#sptinc999j Renda média pré-imposto do top 0.1%
+
+#add filters in data
+dt_income <- dt_income[percentile == "p99p100" ]
+dt_income <- dt_income[variable == "sptinc992j" ]
+
+setorder(dt_income, country, year)
+
+#View(dt_income[, list(countryname, year, value, variable)])
+
+#visualize aus data
+dt_aus <- dt_income[countryname == "Australia"]
+dt_aus[, year := as.integer(year)]
+setorder(dt_aus, year)
+
+#graph
+ggplot(dt_aus, aes(x = year, y = value)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Top 1% pre-tax income share (Australia)",
+    x = "Year",
+    y = "Share of pre-tax national income"
+  ) +
+  theme_minimal()
+
+
+#make some corrections
+setnames(dt_income, c("country", "countryname","value"), 
+         c("Code", "Country", "share_income1"))
+
+dt_income <- dt_income[, .SD,
+                       .SDcols = c("Country", "Code", "year", "share_income1")]
+
+
+#save data
+fwrite(dt_income,
+       file.path(data_dir, paste0("income_share1_WID.csv")),
+       sep = ",")
+
+rm(dt_income,
+   dt_aus)
 
 #Merge databases --------------------------------------------------------------
 
