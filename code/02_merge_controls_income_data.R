@@ -17,14 +17,6 @@ if (length(to_install) > 0) {
 invisible(lapply(packages, library, character.only = TRUE))
 
 
-oecd_countries <- c(
-  "Australia","Austria","Belgium","Canada","Chile","Colombia","Costa Rica",
-  "Czechia","Denmark","Estonia","Finland","France","Germany","Greece",
-  "Hungary","Iceland","Ireland","Israel","Italy","Japan","Korea","Latvia",
-  "Lithuania","Luxembourg","Mexico","Netherlands","New Zealand","Norway",
-  "Poland","Portugal","Slovak Republic","Slovenia","Spain","Sweden",
-  "Switzerland","Türkiye","United Kingdom","United States"
-)
 
 #PACKAGES USED
 library(data.table)
@@ -42,6 +34,16 @@ if (user == "Rayne") {
 code_dir <- file.path(working_dir, "code")
 
 
+oecd_countries <- c(
+  "Australia","Austria","Belgium","Canada","Chile","Colombia","Costa Rica",
+  "Czechia","Denmark","Estonia","Finland","France","Germany","Greece",
+  "Hungary","Iceland","Ireland","Israel","Italy","Japan","Korea","Latvia",
+  "Lithuania","Luxembourg","Mexico","Netherlands","New Zealand","Norway",
+  "Poland","Portugal","Slovak Republic","Slovenia","Spain","Sweden",
+  "Switzerland","Turkiye","United Kingdom","United States"
+)
+
+
 # 1 - open panel data------------------------------------------------------------------
 panel_oecd <- data.table(
   read_csv(
@@ -52,6 +54,15 @@ panel_oecd  <- as.data.table(panel_oecd)
 
 head(panel_oecd)
 colnames(panel_oecd)
+
+unique_countries <- sort(unique(panel_oecd$Country))
+unique_countries
+
+
+#harmonize country names to merge
+panel_oecd[, Country := fifelse(Country == "Korea, Rep.", "Korea", Country)]
+#panel_oecd[, Country := fifelse(Country == "Turkiye", "Turkiye", Country)]
+
 
 # 2 - Create growth rate for some variables--------------------------------------------
 setorder(panel_oecd, Code, year)
@@ -78,7 +89,6 @@ panel_oecd[, g_gov_g_debt := (gov_gross_debt - data.table::shift(gov_gross_debt)
 
 #View(panel_oecd[, list(Country, year, gov_gross_debt, g_gov_g_debt)])
 
-
 # 3 - Open rubolino database --------------------------------------------
 dt2 <- data.table(
   read_xls(
@@ -101,5 +111,48 @@ rubolino <- merge(dt2, omega, by = c("Year","Code","Country"), all.x = TRUE)
 
 setorder(rubolino, Country, Year)
 
+
 setdiff(oecd_countries, sort(unique(rubolino$Country)))
 
+unique_countries <- sort(unique(rubolino$Country))
+unique_countries
+
+unique_countries <- sort(unique(panel_oecd$Country))
+unique_countries
+
+# 4 - Income database (World Inequality Database) -----------------------------
+
+dt_income <- data.table(
+  read_csv(
+    file.path(data_dir, "income_share1_WID.csv")))
+
+setorder(dt_income, Country, year)
+
+
+unique_countries <- sort(unique(dt_income$Country))
+unique_countries
+
+unique_countries <- sort(unique(panel_oecd$Country))
+unique_countries
+
+
+setdiff(oecd_countries, sort(unique(dt_income$Country)))
+
+
+dt_income[, Country := fcase(
+  Country == "Czech Republic",  "Czechia",
+  Country == "Slovakia",        "Slovak Republic",
+  Country == "Turkey",          "Turkiye",       
+  Country == "USA",             "United States",
+  default = Country
+)]
+
+# 5 - Merge databases ----------------------------------------------------------
+
+setkey(panel_oecd, Country, year)
+setkey(rubolino,  Country, Year)
+
+panel_merged <- rubolino[panel_oecd] 
+
+unique_countries <- sort(unique(panel_merged$Country))
+unique_countries
