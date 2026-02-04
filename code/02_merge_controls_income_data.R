@@ -4,7 +4,8 @@ gc()
 #Install packages
 packages <- c(
   "data.table",
-  "readr"
+  "readr",
+  "readxl"
 )
 
 installed <- rownames(installed.packages())
@@ -178,3 +179,10 @@ nrow(panel_merged)
 
 # number of NA in rubolino by country
 panel_merged[is.na(Omega), .N, by = Country][order(-N)]
+
+setcolorder(panel_merged, c("Code", "Country","year"))
+
+#save data
+fwrite(panel_merged,
+       file.path(data_dir, paste0("complete_dataset.csv")),
+       sep = ",")
