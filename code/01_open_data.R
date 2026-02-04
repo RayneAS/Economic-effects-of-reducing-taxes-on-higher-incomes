@@ -628,6 +628,12 @@ unique_codes
 rm(dt_list)
 rm(country_map)
 
+#save data
+fwrite(panel_data,
+       file.path(data_dir, paste0("control_variables_all_countries.csv")),
+       sep = ",")
+
+
 #Database checks----------------------------------------------------------------
 setdiff(oecd_countries, sort(unique(panel_data$Country)))
 sort(unique(panel_data[oecd == 1, Country]))
