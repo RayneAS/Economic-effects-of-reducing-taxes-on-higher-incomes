@@ -182,6 +182,39 @@ panel_merged[is.na(Omega), .N, by = Country][order(-N)]
 
 setcolorder(panel_merged, c("Code", "Country","year"))
 
+
+# 6 - Data harmonization and save----------------------------------------------------------
+
+
+# Variables originally in percent or % of GDP
+pct_vars <- c(
+  "trade",
+  "tax_revenue",
+  "gross_savings",
+  "gross_fixed_capital",
+  "bank_deposits_to_gdp",
+  "stocks_capt",
+  "stocks_trade",
+  "trade_union",
+  "gov_gross_debt"
+)
+
+for (v in pct_vars) {
+  panel_merged[, paste0(v, "_frac") := get(v) / 100]
+}
+
+# NOTE:
+# Variables originally reported in percent or % of GDP were converted
+# to fractions (0–1) and renamed with suffix '_frac'.
+# Original percent-scale variables were dropped to avoid ambiguity.
+
+# Drop original percent-scale variables
+panel_merged[, (pct_vars) := NULL]
+
+# Log transformations
+panel_merged[, log_gdp_pc := log(gdp_pc)]
+panel_merged[, log_patent := log(1 + patent)]
+
 #save data
 fwrite(panel_merged,
        file.path(data_dir, paste0("complete_dataset.csv")),
