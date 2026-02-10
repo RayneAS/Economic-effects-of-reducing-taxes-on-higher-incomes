@@ -5,8 +5,11 @@ gc()
 packages <- c(
   "data.table",
   "readr",
-  "readxl"
+  "readxl",
+  "kableExtra"
 )
+
+
 
 installed <- rownames(installed.packages())
 to_install <- setdiff(packages, installed)
@@ -22,6 +25,8 @@ invisible(lapply(packages, library, character.only = TRUE))
 #PACKAGES USED
 library(data.table)
 library(readr)
+library(kableExtra)
+
 
 
 # Set user
@@ -35,7 +40,7 @@ if (user == "Rayne") {
 code_dir <- file.path(working_dir, "code")
 
 
-# 1 - open data and run checks------------------------------------------------------------------
+# 1 - open data and run checks----------------------------------------------------
 panel <- data.table(
   read.csv(
     file.path(data_dir,"complete_dataset.csv" )
@@ -189,3 +194,188 @@ if (length(growth_vars) > 0){
   }), fill=TRUE)
   print(growth_check[order(variable)])
 }
+
+# 2 - Missing Analysis ----------------------------------------------------------
+
+# 2.1 -  missing by variable and year 
+miss_by_year <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
+                      by = year, .SDcols = num_vars]
+
+# 2.2 - missing by country 
+miss_by_country <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
+                         by = .(Code, Country), .SDcols = num_vars]
+# check gdp_pc
+#miss_by_country[order(-gdp_pc)][1:10]
+
+# 2.3 - check for within country variation 
+
+#frac_sd_zero: fração de países onde o desvio-padrão ao longo do tempo é zero
+#median_sd_within: desvio-padrão mediano dentro do país
+
+within_sd <- rbindlist(lapply(intersect(num_vars, names(panel)), function(v){
+  if (!is_num(panel[[v]])) return(NULL)
+  tmp <- panel[, .(sd_within = sd(get(v), na.rm=TRUE)), by=.(Code, Country)]
+  data.table(variable=v,
+             frac_sd_zero = mean(tmp$sd_within==0, na.rm=TRUE),
+             median_sd_within = median(tmp$sd_within, na.rm=TRUE))
+}), fill=TRUE)
+
+print(within_sd[order(-frac_sd_zero)])
+
+
+# 3 - Descriptive Analysis ------------------------------------------------------
+
+#define variables
+vars_desc <- c(
+  # outcome
+  "share_income1",
+  
+  # treatment
+  "Reform.Dummy",
+  
+  # controls
+  "log_gdp_pc",
+  "trade_frac",
+  "tax_revenue_frac",
+  "gross_fixed_capital_frac",
+  "working_age_pop",
+  "log_patent"
+)
+
+#define function
+desc_table <- panel[
+  , lapply(.SD, function(x) {
+    c(
+      N    = sum(!is.na(x)),
+      Mean = mean(x, na.rm = TRUE),
+      SD   = sd(x, na.rm = TRUE),
+      Min  = min(x, na.rm = TRUE),
+      Max  = max(x, na.rm = TRUE)
+    )
+  }),
+  .SDcols = vars_desc
+]
+
+desc_table <- as.data.table(t(desc_table), keep.rownames = "Variable")
+
+setnames(
+  desc_table,
+  c("Variable", "N", "Mean", "SD", "Min", "Max")
+)
+
+desc_table
+
+#define labels
+var_labels <- c(
+  share_income1           = "Top 1% income share",
+  Reform.Dummy            = "Tax reform indicator",
+  log_gdp_pc              = "Log GDP per capita",
+  trade_frac         = "Trade openness (share of GDP)",
+  tax_revenue_frac        = "Tax revenue (share of GDP)",
+  gross_fixed_capital_frac= "Gross fixed capital formation (share of GDP)",
+  working_age_pop         = "Working-age population (%)",
+  log_patent              = "Log patent applications"
+)
+
+desc_table[, Variable := var_labels[Variable]]
+
+#get latex code
+kbl(
+  desc_table,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 3,
+  caption = "Descriptive statistics"
+) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 9
+  )
+
+
+# 4 - Define treatment and control groups ------------------------------------------------------
+
+# --- Pre-period sample
+dt_pre <- panel[pre_period == 1]
+dt_pre[ever_treated == 0 & is.na(Reform.Dummy), Reform.Dummy := 0]
+
+# --- Create a copy ONLY for table presentation
+dt_pre_tab <- copy(dt_pre)
+
+# Variables to display in percent (multiply by 100)
+pct_show <- c("trade_frac","tax_revenue_frac","gross_fixed_capital_frac","share_income1")
+pct_show <- intersect(pct_show, names(dt_pre_tab))
+for (vv in pct_show) {
+  dt_pre_tab[, (vv) := 100 * get(vv)]
+}
+
+# --- Stats function (keep as is)
+make_stats <- function(x) {
+  x2 <- x[is.finite(x)]
+  n  <- length(x2)
+  
+  if (n == 0) return(list(N=0.0, Mean=NA_real_, SD=NA_real_, Min=NA_real_, Max=NA_real_))
+  
+  list(
+    N    = as.numeric(n),
+    Mean = as.numeric(mean(x2)),
+    SD   = as.numeric(if (n > 1) sd(x2) else NA_real_),
+    Min  = as.numeric(min(x2)),
+    Max  = as.numeric(max(x2))
+  )
+}
+
+# --- Long format using dt_pre_tab (NOT dt_pre)
+long <- rbindlist(lapply(vars_desc, function(v){
+  tmp <- dt_pre_tab[, make_stats(get(v)), by = ever_treated]
+  tmp_long <- melt(tmp, id.vars = "ever_treated",
+                   variable.name = "Stat", value.name = "value")
+  tmp_long[, Variable := v]
+  tmp_long[]
+}), use.names = TRUE, fill = TRUE)
+
+# --- Wide format
+tab_pre <- dcast(long, Variable + Stat ~ ever_treated, value.var = "value")
+setnames(tab_pre, c("0","1"), c("Never-treated (pre)", "Ever-treated (pre)"))
+
+stat_order <- c("N","Mean","SD","Min","Max")
+tab_pre[, Stat := factor(Stat, levels = stat_order)]
+setorder(tab_pre, Variable, Stat)
+
+
+
+var_labels <- c(
+  share_income1            = "Top 1% income share (%)",
+  Reform.Dummy             = "Tax reform indicator",
+  log_gdp_pc               = "Log GDP per capita",
+  trade_frac               = "Trade openness (% of GDP)",
+  tax_revenue_frac         = "Tax revenue (% of GDP)",
+  gross_fixed_capital_frac = "Gross fixed capital formation (% of GDP)",
+  working_age_pop          = "Working-age population (%)",
+  log_patent               = "Log patent applications"
+)
+
+tab_pre[, Variable_label := fifelse(Variable %chin% names(var_labels),
+                                    var_labels[Variable], Variable)]
+
+
+
+tab_pre[Variable %in% c("trade_frac","tax_revenue_frac","gross_fixed_capital_frac","share_income1") & Stat=="Mean"]
+
+
+fmt_ms <- function(m, s, digits = 1) {
+  ifelse(is.na(m), "",
+         sprintf(paste0("%.", digits, "f (%.", digits, "f)"), m, s))
+}
+
+fmt_mm <- function(a, b, digits = 1) {
+  ifelse(is.na(a), "",
+         sprintf(paste0("[%." , digits, "f, %.", digits, "f]"), a, b))
+}
+
+kbl(tab_pre,
+    format = "latex",
+    booktabs = TRUE,
+    digits = 1,
+    caption = "Pre-treatment descriptive statistics") %>%
+  kable_styling(latex_options = "hold_position", font_size = 9)
