@@ -6,9 +6,10 @@ packages <- c(
   "data.table",
   "readr",
   "readxl",
-  "kableExtra"
+  "knitr",
+  "kableExtra",
+  "did"
 )
-
 
 
 installed <- rownames(installed.packages())
@@ -25,7 +26,10 @@ invisible(lapply(packages, library, character.only = TRUE))
 #PACKAGES USED
 library(data.table)
 library(readr)
+library(knitr)
 library(kableExtra)
+library(did)
+
 
 
 
@@ -40,7 +44,7 @@ if (user == "Rayne") {
 code_dir <- file.path(working_dir, "code")
 
 
-# 1 - open data and run checks----------------------------------------------------
+# 1 - open data ----------------------------------------------------------------
 panel <- data.table(
   read.csv(
     file.path(data_dir,"complete_dataset.csv" )
@@ -49,7 +53,11 @@ panel <- data.table(
 
 colnames(panel)
 
-# 1.1 - Check duplicates  
+panel <- panel[year >= 1980]
+
+
+# 2 - Check duplicates ----------------------------------------------------------------
+  
 key_vars <- c("Code","Country","year")
 
 dup_key <- panel[, .N, by = key_vars][N > 1][order(-N)]
@@ -59,7 +67,7 @@ if (nrow(dup_key) > 0) {
 }
 
 
-# 1.2 - Check the quality of the data 
+# 3 - Check the quality of the data ----------------------------------------------------------------
 
 #for numeric vars
 num_vars <- setdiff(names(panel), c("Code","Country","year"))
@@ -143,7 +151,7 @@ qc_overview <- qc[order(-miss_share, variable)]
 print(qc_overview)
 
 
-# 1.3 - other Checks 
+# 4 - Other Checks  ----------------------------------------------------------------
 
 #dummy vars
 dummy_vars <- intersect(c("Reform.Dummy","Significant.Reform"), names(panel))
@@ -173,7 +181,7 @@ flag_range <- rbindlist(lapply(share_like, function(v){
   data.table(
     variable = v,
     share_outside_0_1 = mean(finite_x < 0 | finite_x > 1, na.rm=TRUE),
-    note = "se estiver em % (0-100) ou pontos do PIB, ignorar este alerta"
+    note = "If it is in % (0-100) or points of GDP, ignore"
   )
 }))
 print(flag_range[order(-share_outside_0_1)])
@@ -195,19 +203,20 @@ if (length(growth_vars) > 0){
   print(growth_check[order(variable)])
 }
 
-# 2 - Missing Analysis ----------------------------------------------------------
+# 5 - Missing Analysis  -------------------------------------------------------
 
-# 2.1 -  missing by variable and year 
+# missing by variable and year 
 miss_by_year <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
                       by = year, .SDcols = num_vars]
 
-# 2.2 - missing by country 
+# missing by country 
 miss_by_country <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
                          by = .(Code, Country), .SDcols = num_vars]
 # check gdp_pc
 #miss_by_country[order(-gdp_pc)][1:10]
 
-# 2.3 - check for within country variation 
+
+# 6 - Check for within country variation  --------------------------------------
 
 #frac_sd_zero: fração de países onde o desvio-padrão ao longo do tempo é zero
 #median_sd_within: desvio-padrão mediano dentro do país
@@ -220,10 +229,15 @@ within_sd <- rbindlist(lapply(intersect(num_vars, names(panel)), function(v){
              median_sd_within = median(tmp$sd_within, na.rm=TRUE))
 }), fill=TRUE)
 
+within_sd[, `:=`(
+  frac_sd_zero_pct = round(100 * frac_sd_zero, 1),
+  median_sd_within = round(median_sd_within, 4)
+)]
+
 print(within_sd[order(-frac_sd_zero)])
 
 
-# 3 - Descriptive Analysis ------------------------------------------------------
+# 7 - Descriptive Analysis total sample  --------------------------------------------
 
 #define variables
 vars_desc <- c(
@@ -270,10 +284,10 @@ var_labels <- c(
   share_income1           = "Top 1% income share",
   Reform.Dummy            = "Tax reform indicator",
   log_gdp_pc              = "Log GDP per capita",
-  trade_frac         = "Trade openness (share of GDP)",
-  tax_revenue_frac        = "Tax revenue (share of GDP)",
-  gross_fixed_capital_frac= "Gross fixed capital formation (share of GDP)",
-  working_age_pop         = "Working-age population (%)",
+  trade_frac         = "Trade openness",
+  tax_revenue_frac        = "Tax revenue",
+  gross_fixed_capital_frac= "Gross fixed capital formation",
+  working_age_pop         = "Working-age population",
   log_patent              = "Log patent applications"
 )
 
@@ -289,34 +303,38 @@ kbl(
 ) %>%
   kable_styling(
     latex_options = c("hold_position"),
-    font_size = 9
+    font_size = 10
   )
 
+#clean
+rm(dup_key,
+   flag_range,
+   growth_check,
+   miss_by_country,
+   miss_by_year,
+   qc,
+   qc_list,
+   qc_overview,
+   within_sd)
 
-# 4 - Define treatment and control groups ------------------------------------------------------
+# 8 - Define treatment and control groups ------------------------------------------------------
 
-# --- Pre-period sample
-dt_pre <- panel[pre_period == 1]
-dt_pre[ever_treated == 0 & is.na(Reform.Dummy), Reform.Dummy := 0]
+# ever-treated indicator (country-level)
+panel[, treated_group := as.integer(any(Reform.Dummy == 1, na.rm = TRUE)), 
+      by = Code]
 
-# --- Create a copy ONLY for table presentation
-dt_pre_tab <- copy(dt_pre)
 
-# Variables to display in percent (multiply by 100)
-pct_show <- c("trade_frac","tax_revenue_frac","gross_fixed_capital_frac","share_income1")
-pct_show <- intersect(pct_show, names(dt_pre_tab))
-for (vv in pct_show) {
-  dt_pre_tab[, (vv) := 100 * get(vv)]
-}
+View(panel[,list(Country, year, Reform.Dummy, treated_group)])
+panel[treated_group == 1, uniqueN(Country)]
 
-# --- Stats function (keep as is)
-make_stats <- function(x) {
+# 1) Função de estatísticas (sempre double)
+make_stats_dt <- function(x) {
   x2 <- x[is.finite(x)]
   n  <- length(x2)
-  
-  if (n == 0) return(list(N=0.0, Mean=NA_real_, SD=NA_real_, Min=NA_real_, Max=NA_real_))
-  
-  list(
+  if (n == 0) {
+    return(data.table(N=0.0, Mean=NA_real_, SD=NA_real_, Min=NA_real_, Max=NA_real_))
+  }
+  data.table(
     N    = as.numeric(n),
     Mean = as.numeric(mean(x2)),
     SD   = as.numeric(if (n > 1) sd(x2) else NA_real_),
@@ -325,57 +343,251 @@ make_stats <- function(x) {
   )
 }
 
-# --- Long format using dt_pre_tab (NOT dt_pre)
-long <- rbindlist(lapply(vars_desc, function(v){
-  tmp <- dt_pre_tab[, make_stats(get(v)), by = ever_treated]
-  tmp_long <- melt(tmp, id.vars = "ever_treated",
-                   variable.name = "Stat", value.name = "value")
+# 2) Long "limpo": Variable x Stat x treated_group
+long_group <- rbindlist(lapply(vars_desc, function(v){
+  tmp <- panel[, make_stats_dt(get(v)), by = treated_group]
+  tmp_long <- melt(tmp,
+                   id.vars = "treated_group",
+                   variable.name = "Stat",
+                   value.name = "value")
   tmp_long[, Variable := v]
   tmp_long[]
 }), use.names = TRUE, fill = TRUE)
 
-# --- Wide format
-tab_pre <- dcast(long, Variable + Stat ~ ever_treated, value.var = "value")
-setnames(tab_pre, c("0","1"), c("Never-treated (pre)", "Ever-treated (pre)"))
+# Checagem (agora TEM que ser)
+unique(long_group$Stat)
 
+# 3) Wide: Control vs Treated
+tab_group <- dcast(long_group, Variable + Stat ~ treated_group, value.var = "value")
+setnames(tab_group, c("0","1"), c("Control", "Treated"))
+
+# 4) Ordenar + arredondar (1 casa)
 stat_order <- c("N","Mean","SD","Min","Max")
-tab_pre[, Stat := factor(Stat, levels = stat_order)]
-setorder(tab_pre, Variable, Stat)
+tab_group[, Stat := factor(Stat, levels = stat_order)]
+setorder(tab_group, Variable, Stat)
+
+tab_group[Stat == "N", c("Control","Treated") := lapply(.SD, as.integer), 
+          .SDcols = c("Control","Treated")]
+tab_group[Stat != "N", c("Control","Treated") := lapply(.SD, 
+          function(x) round(x, 1)), .SDcols = c("Control","Treated")]
+
+# 5) Aplicar labels 
+tab_group[, Variable_label := fifelse(Variable %chin% names(var_labels), 
+                                      var_labels[Variable], Variable)]
+
+tab_group[, c("Variable") := NULL]
 
 
 
-var_labels <- c(
-  share_income1            = "Top 1% income share (%)",
-  Reform.Dummy             = "Tax reform indicator",
-  log_gdp_pc               = "Log GDP per capita",
-  trade_frac               = "Trade openness (% of GDP)",
-  tax_revenue_frac         = "Tax revenue (% of GDP)",
-  gross_fixed_capital_frac = "Gross fixed capital formation (% of GDP)",
-  working_age_pop          = "Working-age population (%)",
-  log_patent               = "Log patent applications"
+kbl(tab_group[, .(Variable_label, Stat, Control, Treated)],
+    format = "latex", booktabs = TRUE, digits = 1,
+    caption = "Descriptive statistics by treatment status") %>%
+  kable_styling(latex_options = "hold_position", font_size = 10)
+
+#Balance table
+
+vars_balance <- c(
+  "share_income1",
+  "log_gdp_pc",
+  "trade_frac",
+  "tax_revenue_frac",
+  "gross_fixed_capital_frac",
+  "working_age_pop",
+  "log_patent"
 )
 
-tab_pre[, Variable_label := fifelse(Variable %chin% names(var_labels),
-                                    var_labels[Variable], Variable)]
+
+balance_table <- rbindlist(lapply(vars_balance, function(v){
+  
+  x_treat  <- panel[treated_group == 1, get(v)]
+  x_control<- panel[treated_group == 0, get(v)]
+  
+  mean_treat   <- mean(x_treat, na.rm = TRUE)
+  mean_control <- mean(x_control, na.rm = TRUE)
+  
+  diff <- mean_treat - mean_control
+  
+  # teste t simples
+  pval <- tryCatch(
+    t.test(x_treat, x_control)$p.value,
+    error = function(e) NA_real_
+  )
+  
+  data.table(
+    Variable      = v,
+    Mean_Control  = mean_control,
+    Mean_Treated  = mean_treat,
+    Difference    = diff,
+    p_value       = pval
+  )
+}))
+
+
+balance_table[, `:=`(
+  Mean_Control = round(Mean_Control, 2),
+  Mean_Treated = round(Mean_Treated, 2),
+  Difference   = round(Difference, 2),
+  p_value      = round(p_value, 3)
+)]
+
+balance_table[, Variable := var_labels[Variable]]
+
+
+kbl(
+  balance_table,
+  format = "latex",
+  booktabs = FALSE,
+  align = "lrrrr",
+  caption = "Balance table: Treated vs Control countries"
+) %>%
+  kable_styling(
+    latex_options = c("hold_position"),
+    font_size = 10
+  )
+
+
+# 9 - graph---------------------------------------------------------------
+
+# 0) grupos
+
+
+panel[, .N, by = treated_group]
+panel[treated_group == 1, uniqueN(Code)]
+
+
+View(panel[,list(Country, year, Reform.Dummy, treated_group)])
+
+
+# 1) primeiro ano de reforma (sem warnings)
+
+panel[, first_treat_year :=
+        if (any(Reform.Dummy == 1, na.rm=TRUE))
+          min(year[Reform.Dummy == 1], na.rm=TRUE)
+      else NA_integer_,
+      by = Code]
+
+
+panel[Country=="Australia",
+      .(first_treat_year=unique(first_treat_year))]
+
+# 2) indicador pré-tratamento
+# pre-period flag
+panel[, pre_period := 0L]
+panel[treated_group == 1 & !is.na(first_treat_year) & year < first_treat_year, pre_period := 1L]
+panel[treated_group == 0, pre_period := 1L]
+
+dt_pre <- panel[pre_period == 1]
+
+View(panel[,list(Country, year, Reform.Dummy, pre_period, treated_group, first_treat_year)])
+
+# 3) restringir never-treated ao mesmo suporte de anos do pré dos tratados
+yr_min <- dt_pre[treated_group == 1, min(year, na.rm = TRUE)]
+yr_max <- dt_pre[treated_group == 1, max(year, na.rm = TRUE)]
+
+dt_pre <- dt_pre[year >= yr_min & year <= yr_max]
+
+View(dt_pre[,list(Country, year, Reform.Dummy, pre_period, treated_group, first_treat_year)])
 
 
 
-tab_pre[Variable %in% c("trade_frac","tax_revenue_frac","gross_fixed_capital_frac","share_income1") & Stat=="Mean"]
+
+# 10 - Package DID---------------------------------------------------------------
+
+panel[, id := .GRP, by = Code]
 
 
-fmt_ms <- function(m, s, digits = 1) {
-  ifelse(is.na(m), "",
-         sprintf(paste0("%.", digits, "f (%.", digits, "f)"), m, s))
-}
+panel[, gvar := first_treat_year]
+panel[is.na(gvar), gvar := 0]
 
-fmt_mm <- function(a, b, digits = 1) {
-  ifelse(is.na(a), "",
-         sprintf(paste0("[%." , digits, "f, %.", digits, "f]"), a, b))
-}
 
-kbl(tab_pre,
-    format = "latex",
-    booktabs = TRUE,
-    digits = 1,
-    caption = "Pre-treatment descriptive statistics") %>%
-  kable_styling(latex_options = "hold_position", font_size = 9)
+View(panel[,list(Country, year, id, Reform.Dummy, treated_group,first_treat_year, gvar)])
+
+
+panel[, .(
+  n_units = uniqueN(id),
+  n_treated = uniqueN(id[gvar > 0]),
+  n_never = uniqueN(id[gvar == 0])
+)]
+
+panel[, uniqueN(gvar)]
+unique <- sort(unique(panel$gvar))
+unique
+
+#type1
+#control_group = "notyettreated"
+att_gt_obj <- att_gt(
+  yname = "share_income1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+
+#Event Studies
+es <- aggte(att_gt_obj, type = "dynamic")
+summary(es)
+
+ggdid(es)
+
+#outras janelas
+es <- aggte(att_gt_obj,
+            type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+
+#type2
+#control_group = "nevertreated"
+att_gt_obj <- att_gt(
+  yname = "share_income1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+
+#Event Studies
+es <- aggte(att_gt_obj, type = "dynamic")
+summary(es)
+
+ggdid(es)
+
+
+#check1
+setorder(panel, Code, year)
+
+panel[, post_adoption_zero := {
+  if (all(is.na(first_treat_year))) FALSE
+  else {
+    t0 <- first_treat_year[1]
+    if (is.na(t0)) FALSE
+    else any(Reform.Dummy[year >= t0] == 0, na.rm = TRUE)
+  }
+}, by = Code]
+
+panel[post_adoption_zero == TRUE, .(Country=unique(Country), first_treat_year=unique(first_treat_year))][]
+
+#check2
+panel[, notyet := as.integer(gvar == 0 | year < gvar)]
+panel[, .(n_notyet = uniqueN(Code[notyet==1]),
+          n_treated_or_post = uniqueN(Code[notyet==0])),
+      by = year][order(year)]
+
+#check3
+panel[gvar>0, .N, by=gvar][order(gvar)]
+
+#check4
+panel[gvar>0, .(n_countries = uniqueN(Code)), by=gvar][order(gvar)]
+
+
