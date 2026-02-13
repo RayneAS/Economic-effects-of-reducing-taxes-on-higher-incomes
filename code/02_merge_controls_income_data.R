@@ -203,6 +203,9 @@ for (v in pct_vars) {
   panel_merged[, paste0(v, "_frac") := get(v) / 100]
 }
 
+panel_merged[, working_age_pop := working_age_pop / 100]
+
+
 # NOTE:
 # Variables originally reported in percent or % of GDP were converted
 # to fractions (0–1) and renamed with suffix '_frac'.
@@ -214,6 +217,7 @@ panel_merged[, (pct_vars) := NULL]
 # Log transformations
 panel_merged[, log_gdp_pc := log(gdp_pc)]
 panel_merged[, log_patent := log(1 + patent)]
+panel_merged[, log_share_income1 := log(share_income1)]
 
 #save data
 fwrite(panel_merged,
