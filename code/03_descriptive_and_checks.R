@@ -8,7 +8,8 @@ packages <- c(
   "readxl",
   "knitr",
   "kableExtra",
-  "did"
+  "did",
+  "ggplot2"
 )
 
 
@@ -29,6 +30,7 @@ library(readr)
 library(knitr)
 library(kableExtra)
 library(did)
+library(ggplot2)
 
 
 
@@ -42,6 +44,7 @@ if (user == "Rayne") {
 }
 
 code_dir <- file.path(working_dir, "code")
+figure_dir <- file.path(working_dir, "output")
 
 
 # 1 - open data ----------------------------------------------------------------
@@ -53,8 +56,11 @@ panel <- data.table(
 
 colnames(panel)
 
+#Filtro provisorio!!!
 panel <- panel[year >= 1980]
 
+# unique_year <- sort(unique(panel$year))
+# unique_year
 
 # 2 - Check duplicates ----------------------------------------------------------------
   
@@ -245,7 +251,7 @@ vars_desc <- c(
   "share_income1",
   
   # treatment
-  "Reform.Dummy",
+  #"Reform.Dummy",
   
   # controls
   "log_gdp_pc",
@@ -317,148 +323,22 @@ rm(dup_key,
    qc_overview,
    within_sd)
 
-# 8 - Define treatment and control groups ------------------------------------------------------
+# 8 - Define auxiliar vars to did package ------------------------------------------------------
+
+setorder(panel, Code, year)
 
 # ever-treated indicator (country-level)
 panel[, treated_group := as.integer(any(Reform.Dummy == 1, na.rm = TRUE)), 
       by = Code]
 
-
-View(panel[,list(Country, year, Reform.Dummy, treated_group)])
+#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
 panel[treated_group == 1, uniqueN(Country)]
-
-# 1) Função de estatísticas (sempre double)
-make_stats_dt <- function(x) {
-  x2 <- x[is.finite(x)]
-  n  <- length(x2)
-  if (n == 0) {
-    return(data.table(N=0.0, Mean=NA_real_, SD=NA_real_, Min=NA_real_, Max=NA_real_))
-  }
-  data.table(
-    N    = as.numeric(n),
-    Mean = as.numeric(mean(x2)),
-    SD   = as.numeric(if (n > 1) sd(x2) else NA_real_),
-    Min  = as.numeric(min(x2)),
-    Max  = as.numeric(max(x2))
-  )
-}
-
-# 2) Long "limpo": Variable x Stat x treated_group
-long_group <- rbindlist(lapply(vars_desc, function(v){
-  tmp <- panel[, make_stats_dt(get(v)), by = treated_group]
-  tmp_long <- melt(tmp,
-                   id.vars = "treated_group",
-                   variable.name = "Stat",
-                   value.name = "value")
-  tmp_long[, Variable := v]
-  tmp_long[]
-}), use.names = TRUE, fill = TRUE)
-
-# Checagem (agora TEM que ser)
-unique(long_group$Stat)
-
-# 3) Wide: Control vs Treated
-tab_group <- dcast(long_group, Variable + Stat ~ treated_group, value.var = "value")
-setnames(tab_group, c("0","1"), c("Control", "Treated"))
-
-# 4) Ordenar + arredondar (1 casa)
-stat_order <- c("N","Mean","SD","Min","Max")
-tab_group[, Stat := factor(Stat, levels = stat_order)]
-setorder(tab_group, Variable, Stat)
-
-tab_group[Stat == "N", c("Control","Treated") := lapply(.SD, as.integer), 
-          .SDcols = c("Control","Treated")]
-tab_group[Stat != "N", c("Control","Treated") := lapply(.SD, 
-          function(x) round(x, 1)), .SDcols = c("Control","Treated")]
-
-# 5) Aplicar labels 
-tab_group[, Variable_label := fifelse(Variable %chin% names(var_labels), 
-                                      var_labels[Variable], Variable)]
-
-tab_group[, c("Variable") := NULL]
-
-
-
-kbl(tab_group[, .(Variable_label, Stat, Control, Treated)],
-    format = "latex", booktabs = TRUE, digits = 1,
-    caption = "Descriptive statistics by treatment status") %>%
-  kable_styling(latex_options = "hold_position", font_size = 10)
-
-#Balance table
-
-vars_balance <- c(
-  "share_income1",
-  "log_gdp_pc",
-  "trade_frac",
-  "tax_revenue_frac",
-  "gross_fixed_capital_frac",
-  "working_age_pop",
-  "log_patent"
-)
-
-
-balance_table <- rbindlist(lapply(vars_balance, function(v){
-  
-  x_treat  <- panel[treated_group == 1, get(v)]
-  x_control<- panel[treated_group == 0, get(v)]
-  
-  mean_treat   <- mean(x_treat, na.rm = TRUE)
-  mean_control <- mean(x_control, na.rm = TRUE)
-  
-  diff <- mean_treat - mean_control
-  
-  # teste t simples
-  pval <- tryCatch(
-    t.test(x_treat, x_control)$p.value,
-    error = function(e) NA_real_
-  )
-  
-  data.table(
-    Variable      = v,
-    Mean_Control  = mean_control,
-    Mean_Treated  = mean_treat,
-    Difference    = diff,
-    p_value       = pval
-  )
-}))
-
-
-balance_table[, `:=`(
-  Mean_Control = round(Mean_Control, 2),
-  Mean_Treated = round(Mean_Treated, 2),
-  Difference   = round(Difference, 2),
-  p_value      = round(p_value, 3)
-)]
-
-balance_table[, Variable := var_labels[Variable]]
-
-
-kbl(
-  balance_table,
-  format = "latex",
-  booktabs = FALSE,
-  align = "lrrrr",
-  caption = "Balance table: Treated vs Control countries"
-) %>%
-  kable_styling(
-    latex_options = c("hold_position"),
-    font_size = 10
-  )
-
-
-# 9 - graph---------------------------------------------------------------
-
-# 0) grupos
-
-
 panel[, .N, by = treated_group]
 panel[treated_group == 1, uniqueN(Code)]
+#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
 
 
-View(panel[,list(Country, year, Reform.Dummy, treated_group)])
-
-
-# 1) primeiro ano de reforma (sem warnings)
+#Define First of treatment (Tax reform)
 
 panel[, first_treat_year :=
         if (any(Reform.Dummy == 1, na.rm=TRUE))
@@ -470,39 +350,29 @@ panel[, first_treat_year :=
 panel[Country=="Australia",
       .(first_treat_year=unique(first_treat_year))]
 
-# 2) indicador pré-tratamento
-# pre-period flag
+
+# Define pre-period flag
 panel[, pre_period := 0L]
-panel[treated_group == 1 & !is.na(first_treat_year) & year < first_treat_year, pre_period := 1L]
+panel[treated_group == 1 & !is.na(first_treat_year) & 
+        year < first_treat_year, pre_period := 1L]
 panel[treated_group == 0, pre_period := 1L]
 
-dt_pre <- panel[pre_period == 1]
 
-View(panel[,list(Country, year, Reform.Dummy, pre_period, treated_group, first_treat_year)])
+# View(panel[,list(Country, year, Reform.Dummy, pre_period, 
+#                  treated_group, first_treat_year)])
 
-# 3) restringir never-treated ao mesmo suporte de anos do pré dos tratados
-yr_min <- dt_pre[treated_group == 1, min(year, na.rm = TRUE)]
-yr_max <- dt_pre[treated_group == 1, max(year, na.rm = TRUE)]
-
-dt_pre <- dt_pre[year >= yr_min & year <= yr_max]
-
-View(dt_pre[,list(Country, year, Reform.Dummy, pre_period, treated_group, first_treat_year)])
-
-
-
-
-# 10 - Package DID---------------------------------------------------------------
-
+#Define country numeric id did package
 panel[, id := .GRP, by = Code]
 
-
+#Define gvar did package
 panel[, gvar := first_treat_year]
 panel[is.na(gvar), gvar := 0]
 
 
-View(panel[,list(Country, year, id, Reform.Dummy, treated_group,first_treat_year, gvar)])
+# View(panel[,list(Country, year, id, Reform.Dummy,
+#                  treated_group,first_treat_year, gvar)])
 
-
+#data checks
 panel[, .(
   n_units = uniqueN(id),
   n_treated = uniqueN(id[gvar > 0]),
@@ -510,11 +380,115 @@ panel[, .(
 )]
 
 panel[, uniqueN(gvar)]
-unique <- sort(unique(panel$gvar))
-unique
+unique_g_var <- sort(unique(panel$gvar))
+unique_g_var
 
-#type1
-#control_group = "notyettreated"
+#check g_var
+check_gvar <- panel[gvar > 0,
+                    .(
+                      gvar_unique = unique(gvar),
+                      min_year_treated = min(year[Reform.Dummy == 1], na.rm = TRUE)
+                    ),
+                    by = .(Code, Country)
+]
+
+check_gvar[gvar_unique != min_year_treated]
+
+# 9 - Baseline (pre-treatment) summary stats at COUNTRY level------------------------------------------
+
+vars_baseline <- c(
+  "share_income1",
+  "log_gdp_pc",
+  "trade_frac",
+  "tax_revenue_frac",
+  "gross_fixed_capital_frac",
+  "working_age_pop"
+)
+
+missing_vars <- setdiff(vars_baseline, names(panel))
+if (length(missing_vars) > 0) {
+  stop("Variáveis ausentes em vars_baseline: ", paste(missing_vars, collapse = ", "))
+}
+
+
+# - ever-treated: anos < gvar
+# - never-treated: todos os anos (mas podemos restringir ao mesmo suporte temporal)
+panel_pre <- panel[(gvar == 0L) | (year < gvar)]
+
+
+yr_min <- panel_pre[treated_group == 1, min(year, na.rm = TRUE)]
+yr_max <- panel_pre[treated_group == 1, max(year, na.rm = TRUE)]
+panel_pre <- panel_pre[year >= yr_min & year <= yr_max]
+
+# 9.2) Colapsar para 1 linha por país: médias no pré
+# (mantém NA se país não tem dado algum naquela variável no pré)
+country_pre <- panel_pre[, lapply(.SD, function(x) {
+  x2 <- x[is.finite(x)]
+  if (length(x2) == 0) NA_real_ else mean(x2)
+}), by = .(Code, Country, treated_group), .SDcols = vars_baseline]
+
+
+# 9.3) Função de teste de diferença de médias ENTRE PAÍSES
+diff_pval <- function(x_treat, x_ctrl) {
+  # remove NA
+  xt <- x_treat[is.finite(x_treat)]
+  xc <- x_ctrl[is.finite(x_ctrl)]
+  if (length(xt) < 2 || length(xc) < 2) return(NA_real_)
+  tryCatch(t.test(xt, xc)$p.value, error = function(e) NA_real_)
+}
+
+
+# 9.4) Montar tabela: Treated vs Never + Diff + p-val
+baseline_table <- rbindlist(lapply(vars_baseline, function(v){
+  x_treat <- country_pre[treated_group == 1, get(v)]
+  x_ctrl  <- country_pre[treated_group == 0, get(v)]
+  
+  mean_treat <- mean(x_treat, na.rm = TRUE)
+  mean_ctrl  <- mean(x_ctrl,  na.rm = TRUE)
+  
+  data.table(
+    Variable     = v,
+    N_Treated    = sum(is.finite(x_treat)),
+    N_Never      = sum(is.finite(x_ctrl)),
+    Treated      = mean_treat,
+    Never        = mean_ctrl,
+    Diff         = mean_treat - mean_ctrl,
+    P_value      = diff_pval(x_treat, x_ctrl)
+  )
+}), fill = TRUE)
+
+
+# 9.5) Aplicar labels (usa seu var_labels)
+baseline_table[, Variable := fifelse(Variable %chin% names(var_labels),
+                                     var_labels[Variable], Variable)]
+
+
+# 9.6) Arredondar
+baseline_table[, `:=`(
+  Treated = round(Treated, 3),
+  Never   = round(Never, 3),
+  Diff    = round(Diff, 3),
+  P_value = round(P_value, 3)
+)]
+
+
+# 9.7) Render LaTeX
+kbl(
+  baseline_table[, .(Variable, N_Treated, N_Never, Treated, Never, Diff, P_value)],
+  format = "latex",
+  booktabs = TRUE,
+  align = "lrrrrrrr",
+  caption = "Pre-treatment country-level summary statistics: Treated vs Never-treated"
+) %>%
+  kable_styling(latex_options = "hold_position", font_size = 10)
+
+
+# 10 - DID estimations ------------------------------------------------------
+
+
+#Uncontitional----------------------------
+#Event Studies
+# main: notyettreated
 att_gt_obj <- att_gt(
   yname = "share_income1",
   tname = "year",
@@ -525,16 +499,7 @@ att_gt_obj <- att_gt(
   control_group = "notyettreated"
 )
 
-
-#Event Studies
-es <- aggte(att_gt_obj, type = "dynamic")
-summary(es)
-
-ggdid(es)
-
-#outras janelas
-es <- aggte(att_gt_obj,
-            type = "dynamic",
+es <- aggte(att_gt_obj, type = "dynamic",
             min_e = -5,
             max_e = 10)
 
@@ -543,9 +508,26 @@ summary(es)
 ggdid(es)
 
 
+p_es <- ggdid(es)
 
-#type2
-#control_group = "nevertreated"
+ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+# #outras janelas
+# es <- aggte(att_gt_obj,
+#             type = "dynamic",
+#             min_e = -5,
+#             max_e = 10)
+# 
+# summary(es)
+# 
+# ggdid(es)
+
+
+#Event Studies
+# robustness: nevertreated
 att_gt_obj <- att_gt(
   yname = "share_income1",
   tname = "year",
@@ -556,15 +538,24 @@ att_gt_obj <- att_gt(
   control_group = "nevertreated"
 )
 
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
 
-#Event Studies
-es <- aggte(att_gt_obj, type = "dynamic")
 summary(es)
 
 ggdid(es)
 
+p_es <- ggdid(es)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
 
 #check1
+
 setorder(panel, Code, year)
 
 panel[, post_adoption_zero := {
@@ -576,18 +567,81 @@ panel[, post_adoption_zero := {
   }
 }, by = Code]
 
-panel[post_adoption_zero == TRUE, .(Country=unique(Country), first_treat_year=unique(first_treat_year))][]
+panel[post_adoption_zero == TRUE, .(Country=unique(Country), 
+                          first_treat_year=unique(first_treat_year))][]
 
 #check2
+
 panel[, notyet := as.integer(gvar == 0 | year < gvar)]
 panel[, .(n_notyet = uniqueN(Code[notyet==1]),
           n_treated_or_post = uniqueN(Code[notyet==0])),
       by = year][order(year)]
 
 #check3
+
 panel[gvar>0, .N, by=gvar][order(gvar)]
 
 #check4
+
 panel[gvar>0, .(n_countries = uniqueN(Code)), by=gvar][order(gvar)]
 
 
+#Conditional ----------------------------------
+
+#Event Studies
+# main: notyettreated
+
+att_gt_cond <- att_gt(
+  yname = "share_income1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond)
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_cond <- att_gt(
+  yname = "share_income1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond)
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
