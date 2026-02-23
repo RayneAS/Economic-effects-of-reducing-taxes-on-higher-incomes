@@ -9,8 +9,11 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
+  "fastglm",
   "ggplot2"
 )
+
+
 
 
 installed <- rownames(installed.packages())
@@ -23,6 +26,8 @@ if (length(to_install) > 0) {
 invisible(lapply(packages, library, character.only = TRUE))
 
 
+# install.packages("fastglm", type = "source", 
+#                  repos = "https://cran.r-project.org")
 
 #PACKAGES USED
 library(data.table)
@@ -31,8 +36,7 @@ library(knitr)
 library(kableExtra)
 library(did)
 library(ggplot2)
-
-
+library(fastglm)
 
 
 # Set user
@@ -58,6 +62,8 @@ colnames(panel)
 
 #Filtro provisorio!!!
 panel <- panel[year >= 1980]
+
+panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
 
 # unique_year <- sort(unique(panel$year))
 # unique_year
@@ -339,7 +345,6 @@ panel[treated_group == 1, uniqueN(Code)]
 
 
 #Define First of treatment (Tax reform)
-
 panel[, first_treat_year :=
         if (any(Reform.Dummy == 1, na.rm=TRUE))
           min(year[Reform.Dummy == 1], na.rm=TRUE)
@@ -350,6 +355,9 @@ panel[, first_treat_year :=
 panel[Country=="Australia",
       .(first_treat_year=unique(first_treat_year))]
 
+panel[Country=="Japan",
+      .(first_treat_year=unique(first_treat_year))]
+
 
 # Define pre-period flag
 panel[, pre_period := 0L]
@@ -358,7 +366,7 @@ panel[treated_group == 1 & !is.na(first_treat_year) &
 panel[treated_group == 0, pre_period := 1L]
 
 
-# View(panel[,list(Country, year, Reform.Dummy, pre_period, 
+# View(panel[,list(Country, year, Reform.Dummy, pre_period,
 #                  treated_group, first_treat_year)])
 
 #Define country numeric id did package
@@ -378,6 +386,10 @@ panel[, .(
   n_treated = uniqueN(id[gvar > 0]),
   n_never = uniqueN(id[gvar == 0])
 )]
+
+# test <- panel[treated_group==1]
+# unique_countri <- unique(test$Country)
+# unique_countri
 
 panel[, uniqueN(gvar)]
 unique_g_var <- sort(unique(panel$gvar))
@@ -411,8 +423,8 @@ if (length(missing_vars) > 0) {
 }
 
 
-# - ever-treated: anos < gvar
-# - never-treated: todos os anos (mas podemos restringir ao mesmo suporte temporal)
+#ever-treated: years < gvar
+#never-treated: in all years in the sample
 panel_pre <- panel[(gvar == 0L) | (year < gvar)]
 
 
@@ -420,15 +432,14 @@ yr_min <- panel_pre[treated_group == 1, min(year, na.rm = TRUE)]
 yr_max <- panel_pre[treated_group == 1, max(year, na.rm = TRUE)]
 panel_pre <- panel_pre[year >= yr_min & year <= yr_max]
 
-# 9.2) Colapsar para 1 linha por país: médias no pré
-# (mantém NA se país não tem dado algum naquela variável no pré)
+#mean by country - for selected vars
 country_pre <- panel_pre[, lapply(.SD, function(x) {
   x2 <- x[is.finite(x)]
   if (length(x2) == 0) NA_real_ else mean(x2)
 }), by = .(Code, Country, treated_group), .SDcols = vars_baseline]
 
 
-# 9.3) Função de teste de diferença de médias ENTRE PAÍSES
+# function test of mean difference between countries
 diff_pval <- function(x_treat, x_ctrl) {
   # remove NA
   xt <- x_treat[is.finite(x_treat)]
@@ -438,7 +449,7 @@ diff_pval <- function(x_treat, x_ctrl) {
 }
 
 
-# 9.4) Montar tabela: Treated vs Never + Diff + p-val
+#table: treated vs never treated + diff + p-val
 baseline_table <- rbindlist(lapply(vars_baseline, function(v){
   x_treat <- country_pre[treated_group == 1, get(v)]
   x_ctrl  <- country_pre[treated_group == 0, get(v)]
@@ -458,12 +469,12 @@ baseline_table <- rbindlist(lapply(vars_baseline, function(v){
 }), fill = TRUE)
 
 
-# 9.5) Aplicar labels (usa seu var_labels)
+#labels
 baseline_table[, Variable := fifelse(Variable %chin% names(var_labels),
                                      var_labels[Variable], Variable)]
 
 
-# 9.6) Arredondar
+#round
 baseline_table[, `:=`(
   Treated = round(Treated, 3),
   Never   = round(Never, 3),
@@ -472,13 +483,13 @@ baseline_table[, `:=`(
 )]
 
 
-# 9.7) Render LaTeX
+#LaTeX table
 kbl(
   baseline_table[, .(Variable, N_Treated, N_Never, Treated, Never, Diff, P_value)],
   format = "latex",
   booktabs = TRUE,
   align = "lrrrrrrr",
-  caption = "Pre-treatment country-level summary statistics: Treated vs Never-treated"
+  caption = "Pre-treatment country-level summary statistics: Ever-treated vs Never-treated"
 ) %>%
   kable_styling(latex_options = "hold_position", font_size = 10)
 
@@ -645,3 +656,12 @@ p_cond
 ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"), 
        plot = p_cond,
        height= 4, width = 6)
+
+
+getS3method("fastglm", "formula", optional = TRUE)
+  packageVersion("fastglm")
+  library(fastglm)
+  
+  
+  R.version.string
+  Sys.which("make")
