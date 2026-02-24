@@ -129,9 +129,16 @@ setnames(rubolino, "Year", "year")
 
 # 4 - Income database (World Inequality Database) -----------------------------
 
+#Inequality data it was cleaned and organized by Mariana in another code 
+
 dt_income <- data.table(
   read_csv(
-    file.path(data_dir, "income_share1_WID.csv")))
+    file.path(data_dir, "inequality_data-wid.csv")))
+
+
+colnames(dt_income)
+
+setnames(dt_income, c("country", "countryname"), c("Code", "Country"))
 
 dt_income <- dt_income[, ("Code") := NULL]
 
