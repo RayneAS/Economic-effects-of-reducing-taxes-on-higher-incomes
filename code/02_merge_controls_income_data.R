@@ -133,13 +133,10 @@ setnames(rubolino, "Year", "year")
 
 dt_income <- data.table(
   read_csv(
-    file.path(data_dir, "inequality_data-wid.csv")))
+    file.path(data_dir, "final_data_inequality_WID.csv")))
 
 
 colnames(dt_income)
-
-setnames(dt_income, c("country", "countryname"), c("Code", "Country"))
-
 dt_income <- dt_income[, ("Code") := NULL]
 
 setorder(dt_income, Country, year)
@@ -224,7 +221,9 @@ panel_merged[, (pct_vars) := NULL]
 # Log transformations
 panel_merged[, log_gdp_pc := log(gdp_pc)]
 panel_merged[, log_patent := log(1 + patent)]
-panel_merged[, log_share_income1 := log(share_income1)]
+panel_merged[, log_pt_share_top1 := log(pt_share_top1)]
+panel_merged[, log_d_share_top1 := log(d_share_top1)]
+
 
 #save data
 fwrite(panel_merged,
