@@ -498,60 +498,130 @@ sort(unique(gov_gross_debt$Country))
 # 13 - Open and save income data ------------------------------------------------
 
 #source: World Inequality Database (WID.world)
+#Inequality data it was cleaned and organized by Mariana in another code 
 
 dt_income <- data.table(
   read.csv(
-    file.path(data_dir, "data_incshare_countries.csv")))
+    file.path(data_dir, "inequality_data-wid.csv")))
 
 colnames(dt_income)
 
+#"sdinc_" = share of disposable income
+#"sptinc_" = share of pre tax income
+#"gini_dinc" = gini using disposable income
+#"gini_ptinc" = gini using pre tax income
 
-#sdiinc992j Share da renda disponível do top 1%
-#sdiinc999j Share da renda disponível do top 0.1%
-#sptinc992j Renda média pré-imposto do top 1%
-#sptinc999j Renda média pré-imposto do top 0.1%
+#rename vars 
+setnames(dt_income,
+         old = c(
+           "country",
+           "countryname",
+           "sdinc_p0p10",
+           "sdinc_p90p100",
+           "sdinc_p95p100",
+           "sdinc_p99p100",
+           "sdinc_p99.5p100",
+           "sdinc_p99.9p100",
+           "sdinc_p99.99p100",
+           "sptinc_p0p10",
+           "sptinc_p90p100",
+           "sptinc_p95p100",
+           "sptinc_p99p100",
+           "sptinc_p99.5p100",
+           "sptinc_p99.9p100",
+           "sptinc_p99.99p100",
+           "gini_ptinc",
+           "gini_dinc"
+         ),
+         
+         new = c(
+           "Code",
+           "Country",
+           "d_share_p0_10",
+           "d_share_p90_100",
+           "d_share_p95_100",
+           "d_share_top1",
+           "d_share_top0_5",
+           "d_share_top0_1",
+           "d_share_top0_01",
+           "pt_share_p0_10",
+           "pt_share_p90_100",
+           "pt_share_p95_100",
+           "pt_share_top1",
+           "pt_share_top0_5",
+           "pt_share_top0_1",
+           "pt_share_top0_01",
+           "gini_pre_tax",
+           "gini_post_tax"
+         ))
 
-#add filters in data
-dt_income <- dt_income[percentile == "p99p100" ]
-dt_income <- dt_income[variable == "sptinc992j" ]
 
-setorder(dt_income, country, year)
+setorder(dt_income, Country, year)
 
-#View(dt_income[, list(countryname, year, value, variable)])
 
 #visualize aus data
-dt_aus <- dt_income[countryname == "Australia"]
+dt_aus <- dt_income[Country == "Australia"]
 dt_aus[, year := as.integer(year)]
 setorder(dt_aus, year)
 
-#graph
-ggplot(dt_aus, aes(x = year, y = value)) +
+
+#plot pre-tax vs post-tax top 1% share 
+dt_shares_long <- melt(
+  dt_aus,
+  id.vars = "year",
+  measure.vars = c("pt_share_top1", "d_share_top1"),
+  variable.name = "series",
+  value.name = "share"
+)
+
+dt_shares_long[, series := fifelse(series == "pt_share_top1",
+                                   "Pre-tax (top 1%)",
+                                   "Post-tax (top 1%)")]
+
+ggplot(dt_shares_long, aes(x = year, y = share, linetype = series)) +
   geom_line(linewidth = 1) +
   geom_point(size = 1.5) +
   scale_y_continuous(labels = percent_format(accuracy = 1)) +
   labs(
-    title = "Top 1% pre-tax income share (Australia)",
+    title = "Top 1% income share — pre-tax vs post-tax (Australia)",
     x = "Year",
-    y = "Share of pre-tax national income"
+    y = "Income share"
+  ) +
+  theme_minimal()
+
+#Gini coefficient- pre vs post tax 
+dt_gini_long <- melt(
+  dt_aus,
+  id.vars = "year",
+  measure.vars = c("gini_pre_tax", "gini_post_tax"),
+  variable.name = "series",
+  value.name = "gini"
+)
+
+dt_gini_long[, series := fifelse(series == "gini_pre_tax",
+                                 "Gini (pre-tax)",
+                                 "Gini (post-tax)")]
+
+ggplot(dt_gini_long, aes(x = year, y = gini, linetype = series)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.5) +
+  labs(
+    title = "Gini — pre-tax vs post-tax (Australia)",
+    x = "Year",
+    y = "Gini"
   ) +
   theme_minimal()
 
 
-#make some corrections
-setnames(dt_income, c("country", "countryname","value"), 
-         c("Code", "Country", "share_income1"))
-
-dt_income <- dt_income[, .SD,
-                       .SDcols = c("Country", "Code", "year", "share_income1")]
-
-
 #save data
 fwrite(dt_income,
-       file.path(data_dir, paste0("income_share1_WID.csv")),
+       file.path(data_dir, paste0("final_data_inequality_WID.csv")),
        sep = ",")
 
 rm(dt_income,
-   dt_aus)
+   dt_aus, 
+   dt_gini_long,
+   dt_shares_long)
 
 #Merge databases --------------------------------------------------------------
 
