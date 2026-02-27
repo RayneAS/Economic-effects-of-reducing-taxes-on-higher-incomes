@@ -9,12 +9,11 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
-  "fastglm",
+  #"fastglm",
   "ggplot2",
-  "fixest"
+  "fixest",
+  "car"
 )
-
-
 
 
 installed <- rownames(installed.packages())
@@ -39,6 +38,7 @@ library(did)
 library(ggplot2)
 #library(fastglm)
 library(fixest)
+library(car)
 
 
 
@@ -64,6 +64,7 @@ panel <- data.table(
 colnames(panel)
 
 #Add filter because inequality data stats at 1980
+#(before that there is a lot of missing values)
 panel <- panel[year >= 1980]
 
 panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
@@ -81,8 +82,6 @@ panel[, treated_group := as.integer(any(Reform.Dummy == 1, na.rm = TRUE)),
 panel[treated_group == 1, uniqueN(Country)]
 panel[, .N, by = treated_group]
 panel[treated_group == 1, uniqueN(Code)]
-#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
-
 
 #Define First of treatment (Tax reform)
 panel[, first_treat_year :=
@@ -149,12 +148,32 @@ check_gvar[gvar_unique != min_year_treated]
 # 3 - Baseline (pre-treatment) summary stats at COUNTRY level------------------------------------------
 
 vars_baseline <- c(
-  "share_income1",
+  # outcome
+  "pt_share_top1",
+  "d_share_top1",
+  "gini_pre_tax",
+  "gini_post_tax",
+  
+  # controls
   "log_gdp_pc",
   "trade_frac",
   "tax_revenue_frac",
   "gross_fixed_capital_frac",
   "working_age_pop"
+)
+
+#define labels
+var_labels <- c(
+  pt_share_top1           = "Top 1% income share (pre-tax)",
+  d_share_top1            = "Top 1% income share (post-tax)",
+  gini_pre_tax            = "Gini coefficient (pre-tax income)",
+  gini_post_tax           = "Gini coefficient (pos-tax income)",
+  Reform.Dummy            = "Tax reform indicator",
+  log_gdp_pc              = "Log GDP per capita",
+  trade_frac              = "Trade openness",
+  tax_revenue_frac        = "Tax revenue",
+  gross_fixed_capital_frac= "Gross fixed capital formation",
+  working_age_pop         = "Working-age population"
 )
 
 missing_vars <- setdiff(vars_baseline, names(panel))
@@ -236,75 +255,6 @@ kbl(
 
 # 4 - DID estimations ------------------------------------------------------
 
-
-#Uncontitional----------------------------
-#Event Studies
-# main: notyettreated
-att_gt_obj <- att_gt(
-  yname = "share_income1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "notyettreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-
-p_es <- ggdid(es)
-
-ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-# #outras janelas
-# es <- aggte(att_gt_obj,
-#             type = "dynamic",
-#             min_e = -5,
-#             max_e = 10)
-# 
-# summary(es)
-# 
-# ggdid(es)
-
-
-#Event Studies
-# robustness: nevertreated
-att_gt_obj <- att_gt(
-  yname = "share_income1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "nevertreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-p_es <- ggdid(es)
-
-ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-
 #check1
 
 setorder(panel, Code, year)
@@ -337,13 +287,75 @@ panel[gvar>0, .N, by=gvar][order(gvar)]
 panel[gvar>0, .(n_countries = uniqueN(Code)), by=gvar][order(gvar)]
 
 
+# 4.1 measure of inequality: pt_share_top1-------------------------------
+
+
+#Unconditional----------------------------
+
+
+#Event Studies
+# main: notyettreated
+att_gt_obj <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+p_es <- ggdid(es)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+#Event Studies
+# robustness: nevertreated
+att_gt_obj <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+p_es <- ggdid(es)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+
 #Conditional ----------------------------------
 
 #Event Studies
 # main: notyettreated
 
 att_gt_cond <- att_gt(
-  yname = "share_income1",
+  yname = "pt_share_top1",
   tname = "year",
   idname = "id",
   gname = "gvar",
@@ -373,7 +385,7 @@ ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_cond.jpg")
 # robustness: nevertreated
 
 att_gt_cond <- att_gt(
-  yname = "share_income1",
+  yname = "pt_share_top1",
   tname = "year",
   idname = "id",
   gname = "gvar",
@@ -397,83 +409,111 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        plot = p_cond,
        height= 4, width = 6)
 
-# 
-# getS3method("fastglm", "formula", optional = TRUE)
-#   packageVersion("fastglm")
-#   library(fastglm)
-#   
-#   
-#   R.version.string
-#   Sys.which("make")
+
+
 
 # 5 - Continuous Treatment effect ------------------------------------------------------
-#Treatment is omega intensity
+# Treatment intensity: dose = -Omega at adoption (year==gvar)
 
-# dose no primeiro evento: pegue Omega no ano gvar (por país)
-dose_dt <- panel[gvar > 0 & year == gvar,
-                 .(dose = -Omega),
-                 by = Code]
-
-
-
-#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
-
+dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
 panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
-panel[gvar == 0, dose := 0]   # never-treated com dose 0
+panel[gvar == 0, dose := 0]
 
-View(panel[,list(Country,Code, year, Reform.Dummy, gvar, dose, Omega)])
-
-nrow(panel)
-nrow(dt_es)
-
-nrow(dt_es[complete.cases(
-  share_income1,
-  dose,
-  log_gdp_pc,
-  trade_frac,
-  gross_fixed_capital_frac,
-  working_age_pop
-)])
-
-panel[gvar > 0 & is.na(dose), .N]
-panel[gvar == 0 & is.na(dose), .N]
-
-summary(panel$dose)
-table(is.na(panel$dose))
-table(is.na(panel$share_income1))
-table(is.na(panel$log_gdp_pc))
-table(is.na(panel$trade_frac))
-table(is.na(panel$gross_fixed_capital_frac))
-table(is.na(panel$working_age_pop))
-
-
+# Event time (keep never-treated with e=0 to avoid NA dropping)
 panel[gvar > 0, e := year - gvar]
-panel[gvar == 0, e := NA_integer_]  # never-treated não tem event time
+panel[gvar == 0, e := 0L]
 
-# manter janela
-dt_es <- panel[ (gvar == 0) | (e >= -5 & e <= 10) ]
+# Keep event window + never-treated
+dt_es <- panel[(gvar == 0) | (e >= -5 & e <= 10)]
 
-# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
-#omitindo e=-1
-m <- feols(
-  share_income1 ~ i(e, dose, ref = -1) + log_gdp_pc + trade_frac + 
-    gross_fixed_capital_frac + working_age_pop | 
-    Code + year,
-  data = dt_es,
-  cluster = "Code"
-)
+# Outcomes to run
+outcomes <- c("pt_share_top1", "d_share_top1", "gini_pre_tax", "gini_post_tax")
 
-summary(m)
+# Controls (same for all)
+controls <- c("log_gdp_pc", "trade_frac", "gross_fixed_capital_frac", "working_age_pop")
 
-#plot
-iplot(m)
+# Store models if you want
+models_dose <- list()
 
-png(file.path(figure_dir, "event_study_dose_share_income1.png"),
-    width = 1600, height = 1000, res = 200)
-
-iplot(m, ref.line = 0,
-      xlab = "Event time (e)",
-      ylab = "Effect per unit of dose",
-      main = "Event study (dose)")
+for (y in outcomes) {
+  
+  message("Running dose event-study for: ", y)
+  
+  # vars needed for THIS outcome
+  vars_need <- c(y, "dose", controls, "e", "Code", "year", "gvar")
+  
+  # outcome-specific complete-case sample
+  dt_cc <- dt_es[complete.cases(dt_es[, ..vars_need])]
+  
+  # quick sanity check (skip if empty)
+  diag <- dt_cc[, .(
+    n = .N,
+    n_treated = sum(gvar > 0),
+    n_treated_nonzero_dose = sum(gvar > 0 & dose != 0),
+    dose_sd = sd(dose),
+    e_unique = uniqueN(e)
+  )]
+  
+  print(diag)
+  
+  if (nrow(dt_cc) == 0 || diag$n_treated == 0 || diag$n_treated_nonzero_dose == 0) {
+    warning("Skipping ", y, " (insufficient data after filtering).")
+    next
+  }
+  
+  # Estimate: i(e, dose, ref=-1) interacted event-time with intensity
+  fml <- as.formula(paste0(
+    y, " ~ i(e, dose, ref = -1) + ",
+    paste(controls, collapse = " + "),
+    " | Code + year"
+  ))
+  
+  m <- feols(
+    fml,
+    data = dt_cc,
+    cluster = "Code"
+  )
+  
+  models_dose[[y]] <- m
+  print(summary(m))
+  
+  # Save plot
+  out_png <- file.path(figure_dir, paste0("event_study_dose_", y, ".png"))
+  png(out_png, width = 1600, height = 1000, res = 200)
+  
+  iplot(
+    m,
+    ref.line = 0,
+    xlab = "Event time (e)",
+    ylab = "Effect per unit of dose",
+    main = "Event study (dose)"
+  )
 
 dev.off()
+}
+
+# ---- Export .tex with etable() -------------------------------------------------
+
+etable_args <- c(
+  models_dose,
+  list(
+    tex = TRUE,
+    dict = dict,
+    title = "Dose event-study estimates (fixest)",
+    keep = c(
+      "%i\\(e, dose, ref = -1\\)",
+      "%log_gdp_pc",
+      "%trade_frac",
+      "%gross_fixed_capital_frac",
+      "%working_age_pop"
+    ),
+    fixef_sizes = FALSE,
+    notes = c(
+      "All specifications include country and year fixed effects.",
+      "Standard errors clustered at the country (Code) level."
+    ),
+    file = tex_out
+  )
+)
+
+do.call(etable, etable_args)
