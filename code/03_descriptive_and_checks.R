@@ -9,7 +9,7 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
-  "fastglm",
+  #"fastglm",
   "ggplot2",
   "fixest"
 )
@@ -63,7 +63,8 @@ panel <- data.table(
 
 colnames(panel)
 
-#Add filter because inequality data stats at 1980
+#Add filter because inequality data stats at 1980 
+#(before that there is a lot of missing values)
 panel <- panel[year >= 1980]
 
 panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
@@ -186,7 +187,22 @@ share_like <- intersect(c(
   "stocks_trade_frac",
   "gov_gross_debt_frac",
   "trade_union_frac",
-  "share_income1"         
+  "d_share_p0_10",
+  "d_share_p90_100",
+  "d_share_p95_100",
+  "d_share_top1",
+  "d_share_top0_5",
+  "d_share_top0_1",
+  "d_share_top0_01",
+  "pt_share_p0_10",
+  "pt_share_p90_100",
+  "pt_share_p95_100",
+  "pt_share_top1",
+  "pt_share_top0_5",
+  "pt_share_top0_1",
+  "pt_share_top0_01",
+  "gini_pre_tax",
+  "gini_post_tax"         
 ), names(panel))
 
 flag_range <- rbindlist(lapply(share_like, function(v){
@@ -224,6 +240,11 @@ if (length(growth_vars) > 0){
 miss_by_year <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
                       by = year, .SDcols = num_vars]
 
+View(miss_by_year[, .( year,
+  pt_share_top1,d_share_top1,gini_pre_tax,gini_post_tax,log_gdp_pc,
+  trade_frac,tax_revenue_frac,gross_fixed_capital_frac,working_age_pop,
+  log_patent)])
+
 # missing by country 
 miss_by_country <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
                          by = .(Code, Country), .SDcols = num_vars]
@@ -257,11 +278,11 @@ print(within_sd[order(-frac_sd_zero)])
 #define variables
 vars_desc <- c(
   # outcome
-  "share_income1",
-  
-  # treatment
-  #"Reform.Dummy",
-  
+  "pt_share_top1",
+  "d_share_top1",
+  "gini_pre_tax",
+  "gini_post_tax",
+
   # controls
   "log_gdp_pc",
   "trade_frac",
@@ -296,10 +317,13 @@ desc_table
 
 #define labels
 var_labels <- c(
-  share_income1           = "Top 1% income share",
+  pt_share_top1           = "Top 1% income share (pre-tax)",
+  d_share_top1            = "Top 1% income share (post-tax)",
+  gini_pre_tax            = "Gini coefficient (pre-tax income)",
+  gini_post_tax           = "Gini coefficient (pos-tax income)",
   Reform.Dummy            = "Tax reform indicator",
   log_gdp_pc              = "Log GDP per capita",
-  trade_frac         = "Trade openness",
+  trade_frac              = "Trade openness",
   tax_revenue_frac        = "Tax revenue",
   gross_fixed_capital_frac= "Gross fixed capital formation",
   working_age_pop         = "Working-age population",
