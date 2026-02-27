@@ -15,8 +15,6 @@ packages <- c(
 )
 
 
-
-
 installed <- rownames(installed.packages())
 to_install <- setdiff(packages, installed)
 
@@ -240,10 +238,10 @@ if (length(growth_vars) > 0){
 miss_by_year <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
                       by = year, .SDcols = num_vars]
 
-View(miss_by_year[, .( year,
-  pt_share_top1,d_share_top1,gini_pre_tax,gini_post_tax,log_gdp_pc,
-  trade_frac,tax_revenue_frac,gross_fixed_capital_frac,working_age_pop,
-  log_patent)])
+# View(miss_by_year[, .( year,
+#   pt_share_top1,d_share_top1,gini_pre_tax,gini_post_tax,log_gdp_pc,
+#   trade_frac,tax_revenue_frac,gross_fixed_capital_frac,working_age_pop,
+#   log_patent)])
 
 # missing by country 
 miss_by_country <- panel[, lapply(.SD, function(x) mean(is.na(x))), 
@@ -288,8 +286,7 @@ vars_desc <- c(
   "trade_frac",
   "tax_revenue_frac",
   "gross_fixed_capital_frac",
-  "working_age_pop",
-  "log_patent"
+  "working_age_pop"
 )
 
 #define function
@@ -326,8 +323,7 @@ var_labels <- c(
   trade_frac              = "Trade openness",
   tax_revenue_frac        = "Tax revenue",
   gross_fixed_capital_frac= "Gross fixed capital formation",
-  working_age_pop         = "Working-age population",
-  log_patent              = "Log patent applications"
+  working_age_pop         = "Working-age population"
 )
 
 desc_table[, Variable := var_labels[Variable]]
