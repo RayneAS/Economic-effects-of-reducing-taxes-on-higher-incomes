@@ -11,8 +11,7 @@ packages <- c(
   "did",
   #"fastglm",
   "ggplot2",
-  "fixest",
-  "car"
+  "fixest"
 )
 
 
@@ -38,7 +37,7 @@ library(did)
 library(ggplot2)
 #library(fastglm)
 library(fixest)
-library(car)
+
 
 
 
@@ -415,11 +414,12 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
 # 5 - Continuous Treatment effect ------------------------------------------------------
 # Treatment intensity: dose = -Omega at adoption (year==gvar)
 
+# dose by year of adoption of tax reform (by country)
 dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
 panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
 panel[gvar == 0, dose := 0]
 
-# Event time (keep never-treated with e=0 to avoid NA dropping)
+# Event time (keep never-treated with e=0 )
 panel[gvar > 0, e := year - gvar]
 panel[gvar == 0, e := 0L]
 
@@ -429,23 +429,93 @@ dt_es <- panel[(gvar == 0) | (e >= -5 & e <= 10)]
 # Outcomes to run
 outcomes <- c("pt_share_top1", "d_share_top1", "gini_pre_tax", "gini_post_tax")
 
-# Controls (same for all)
+# Controls 
 controls <- c("log_gdp_pc", "trade_frac", "gross_fixed_capital_frac", "working_age_pop")
 
-# Store models if you want
+# Windows for averages
+# pre window excludes ref = -1 by construction; use [-5,-2] to test pre-trends
+win_pre   <- -5:-2
+win_post0 <- 0:2
+win_post1 <- 3:6
+win_post2 <- 7:10
+win_postA <- 0:10
+
+# Helper: extract event-time coefficients and compute window averages + joint tests
+extract_windows <- function(m, win_pre, win_post0, win_post1, win_post2, win_postA) {
+  
+  b  <- coef(m)
+  V  <- vcov(m)           # with cluster="Code")
+  cn <- names(b)
+  
+  # pega somente os coeficientes do event-time x dose
+  idx <- grepl("dose", cn) & grepl("e::", cn)
+  if (!any(idx)) return(NULL)
+  
+  b_ev  <- b[idx]
+  cn_ev <- cn[idx]
+  
+  # extrai k do event time a partir do nome (robusto)
+  e_k <- suppressWarnings(as.integer(sub(".*e::(-?\\d+).*", "\\1", cn_ev)))
+  ok  <- is.finite(e_k)
+  b_ev <- b_ev[ok]; cn_ev <- cn_ev[ok]; e_k <- e_k[ok]
+  if (length(b_ev) == 0) return(NULL)
+  
+  mean_win <- function(w){
+    sel <- e_k %in% w
+    if (!any(sel)) return(NA_real_)
+    mean(b_ev[sel], na.rm = TRUE)
+  }
+  
+  # Wald test robusto: H0: coeficientes na janela = 0
+  p_wald <- function(w){
+    sel <- e_k %in% w
+    if (!any(sel)) return(NA_real_)
+    
+    terms <- cn_ev[sel]
+    pos   <- match(terms, cn)     # posições no vetor completo de coeficientes
+    
+    pos <- pos[is.finite(pos)]
+    if (length(pos) == 0) return(NA_real_)
+    
+    bS <- as.numeric(b[pos])
+    VS <- V[pos, pos, drop = FALSE]
+    
+    # Se VS for singular, usa pseudo-inversa
+    invVS <- tryCatch(solve(VS), error = function(e) NULL)
+    if (is.null(invVS)) {
+      if (!requireNamespace("MASS", quietly = TRUE)) return(NA_real_)
+      invVS <- MASS::ginv(VS)
+    }
+    
+    W <- drop(t(bS) %*% invVS %*% bS)  # estatística Wald ~ Chi^2(q)
+    q <- length(bS)
+    
+    pchisq(W, df = q, lower.tail = FALSE)
+  }
+  
+  list(
+    avg_pre    = mean_win(win_pre),
+    avg_post0  = mean_win(win_post0),
+    avg_post1  = mean_win(win_post1),
+    avg_post2  = mean_win(win_post2),
+    avg_postA  = mean_win(win_postA),
+    p_pre      = p_wald(win_pre),
+    p_postA    = p_wald(win_postA)
+  )
+}
+
+# Store models + table results
 models_dose <- list()
+tab_windows <- data.table()
 
 for (y in outcomes) {
   
   message("Running dose event-study for: ", y)
   
-  # vars needed for THIS outcome
-  vars_need <- c(y, "dose", controls, "e", "Code", "year", "gvar")
-  
   # outcome-specific complete-case sample
+  vars_need <- c(y, "dose", controls, "e", "Code", "year", "gvar")
   dt_cc <- dt_es[complete.cases(dt_es[, ..vars_need])]
   
-  # quick sanity check (skip if empty)
   diag <- dt_cc[, .(
     n = .N,
     n_treated = sum(gvar > 0),
@@ -453,7 +523,6 @@ for (y in outcomes) {
     dose_sd = sd(dose),
     e_unique = uniqueN(e)
   )]
-  
   print(diag)
   
   if (nrow(dt_cc) == 0 || diag$n_treated == 0 || diag$n_treated_nonzero_dose == 0) {
@@ -461,59 +530,95 @@ for (y in outcomes) {
     next
   }
   
-  # Estimate: i(e, dose, ref=-1) interacted event-time with intensity
+  # estimate
   fml <- as.formula(paste0(
     y, " ~ i(e, dose, ref = -1) + ",
     paste(controls, collapse = " + "),
     " | Code + year"
   ))
   
-  m <- feols(
-    fml,
-    data = dt_cc,
-    cluster = "Code"
-  )
-  
+  m <- feols(fml, data = dt_cc, cluster = "Code")
   models_dose[[y]] <- m
-  print(summary(m))
   
-  # Save plot
+  # plot
   out_png <- file.path(figure_dir, paste0("event_study_dose_", y, ".png"))
   png(out_png, width = 1600, height = 1000, res = 200)
-  
   iplot(
     m,
     ref.line = 0,
     xlab = "Event time (e)",
     ylab = "Effect per unit of dose",
-    main = "Event study (dose)"
+    main = paste0("Dose event-study: ", y)
   )
-
-dev.off()
+  dev.off()
+  
+  # window averages + joint tests
+  w <- extract_windows(m, win_pre, win_post0, win_post1, win_post2, win_postA)
+  if (is.null(w)) {
+    warning("Could not find event-time x dose coefficients for: ", y)
+    next
+  }
+  
+  tab_windows <- rbind(
+    tab_windows,
+    data.table(
+      outcome   = y,
+      N         = nobs(m),
+      avg_pre   = w$avg_pre,
+      avg_0_2   = w$avg_post0,
+      avg_3_6   = w$avg_post1,
+      avg_7_10  = w$avg_post2,
+      avg_0_10  = w$avg_postA,
+      p_pre     = w$p_pre,
+      p_post    = w$p_postA
+    ),
+    fill = TRUE
+  )
 }
 
-# ---- Export .tex with etable() -------------------------------------------------
+# ---------- Export .tex: window-averages table (main result) ---------------------
 
-etable_args <- c(
-  models_dose,
-  list(
-    tex = TRUE,
-    dict = dict,
-    title = "Dose event-study estimates (fixest)",
-    keep = c(
-      "%i\\(e, dose, ref = -1\\)",
-      "%log_gdp_pc",
-      "%trade_frac",
-      "%gross_fixed_capital_frac",
-      "%working_age_pop"
-    ),
-    fixef_sizes = FALSE,
-    notes = c(
-      "All specifications include country and year fixed effects.",
-      "Standard errors clustered at the country (Code) level."
-    ),
-    file = tex_out
-  )
+# labels
+outcome_labels <- c(
+  pt_share_top1 = "Top 1% income share (pre-tax)",
+  d_share_top1  = "Top 1% income share (post-tax)",
+  gini_pre_tax  = "Gini (pre-tax)",
+  gini_post_tax = "Gini (post-tax)"
 )
 
-do.call(etable, etable_args)
+tab_windows[, outcome := fifelse(outcome %chin% names(outcome_labels),
+                                 outcome_labels[outcome], outcome)]
+
+# rounding
+tab_windows[, `:=`(
+  avg_pre  = round(avg_pre, 2),
+  avg_0_2  = round(avg_0_2, 2),
+  avg_3_6  = round(avg_3_6, 2),
+  avg_7_10 = round(avg_7_10, 2),
+  avg_0_10 = round(avg_0_10, 2),
+  p_pre    = round(p_pre, 2),
+  p_post   = round(p_post, 2)
+)]
+
+tex_out <- file.path(figure_dir, "etable_dose_eventstudy_windows.tex")
+
+# Use knitr + kableExtra to make a clean LaTeX table
+kbl(
+  tab_windows[, .(Outcome = outcome, N,
+                  `Avg pre (-5,-2)` = avg_pre,
+                  `Avg (0,2)` = avg_0_2,
+                  `Avg (3,6)` = avg_3_6,
+                  `Avg (7,10)` = avg_7_10,
+                  `Avg post (0,10)` = avg_0_10,
+                  `Pre-trend p-val` = p_pre,
+                  `Post (0,10) p-val` = p_post)],
+  format = "latex",
+  booktabs = TRUE,
+  align = "lrrrrrrrr",
+  caption = "Dose event-study: window-averaged effects and joint tests",
+  label = "tab:dose_eventstudy_windows"
+) |>
+  kable_styling(latex_options = "hold_position", font_size = 10) |>
+  save_kable(file = tex_out)
+
+message("Saved LaTeX table: ", tex_out)
