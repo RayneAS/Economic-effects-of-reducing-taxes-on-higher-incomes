@@ -67,6 +67,7 @@ colnames(panel)
 panel <- panel[year >= 1980]
 
 panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
+panel[is.na(Significant.Reform), Significant.Reform := 0L]
 
 
 # 2 - Define auxiliar vars to did package ------------------------------------------------------
@@ -409,9 +410,103 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        height= 4, width = 6)
 
 
+# 5 - OLD FOR VARIABLE TESTES Continuous Treatment effect ------------------------------------------------------
+#Treatment is omega intensity
+
+# dose no primeiro evento: pegue Omega no ano gvar (por país) 
+dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
+
+#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
+
+panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
+panel[gvar == 0, dose := 0]   # never-treated com dose 0
+
+#View(panel[,list(Country,Code, year, Reform.Dummy, gvar, dose, Omega)])
+
+panel[gvar > 0 & is.na(dose), .N]
+panel[gvar == 0 & is.na(dose), .N]
+
+summary(panel$dose)
+table(is.na(panel$dose))
+table(is.na(panel$pt_share_top1))
+table(is.na(panel$log_gdp_pc))
+table(is.na(panel$trade_frac))
+table(is.na(panel$gross_fixed_capital_frac))
+table(is.na(panel$working_age_pop))
+table(is.na(panel$tax_revenue_frac))
+table(is.na(panel$gross_savings_frac))
 
 
-# 5 - Continuous Treatment effect ------------------------------------------------------
+
+panel[gvar > 0, e := year - gvar]
+panel[gvar == 0, e := 0L] # never-treated não tem event time
+
+# manter janela
+dt_es <- panel[(gvar == 0) | (e >= -5 & e <= 10)]
+
+
+nrow(dt_es[complete.cases(
+  pt_share_top1,
+  dose,
+  log_gdp_pc,
+  trade_frac,
+  gross_fixed_capital_frac,
+  working_age_pop
+)])
+
+
+panel[gvar > 0 & is.na(dose), .N]
+
+# View(panel[,list(Country,year, Reform.Dummy, Significant.Reform, gvar, dose, 
+# Omega, first_treat_year, pre_period, post_adoption_zero, notyet, e)])
+
+### TYPE1
+#ESTIMATION
+# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
+#omitindo e=-1
+m0 <- feols(
+  pt_share_top1 ~ i(e, dose, ref = -1) +
+    log_gdp_pc + trade_frac + gross_fixed_capital_frac + gross_savings_frac + 
+    working_age_pop |
+    Code + year,
+  data = dt_es, cluster = "Code"
+)
+
+
+summary(m0)
+
+#plot
+iplot(m0)
+
+png(file.path(figure_dir, "event_study_dose_share_income1.png"),
+    width = 1600, height = 1000, res = 200)
+
+iplot(m0, ref.line = 0,
+      xlab = "Event time (e)",
+      ylab = "Effect per unit of dose",
+      main = "Event study (dose)")
+
+dev.off()
+
+#ESTIMATION - sem controles
+# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
+#omitindo e=-1
+m1 <- feols(
+  pt_share_top1 ~ i(e, dose, ref = -1) |
+    Code + year ,
+  data = dt_es, cluster = "Code"
+)
+
+
+summary(m1)
+
+#plot
+iplot(m1)
+
+
+
+
+# 6 - Continuous Treatment effect ------------------------------------------------------
 # Treatment intensity: dose = -Omega at adoption (year==gvar)
 
 # dose by year of adoption of tax reform (by country)
