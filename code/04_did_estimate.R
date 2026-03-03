@@ -417,6 +417,9 @@ panel[gvar > 0 & is.na(dose), dose := 0]
 # 3) continuous adoption: treated only if dose>0
 panel[, gvar_cont := fifelse(dose > 0, gvar, 0L)]
 
+
+panel[gvar_cont == 0, dose := 0]
+
 # sanity checks required by contdid (time-invariant)
 stopifnot(panel[, all(uniqueN(dose) == 1L), by = Code]$V1 |> all())
 stopifnot(panel[, all(uniqueN(gvar_cont) == 1L), by = Code]$V1 |> all())
@@ -455,27 +458,16 @@ res_cont <- cont_did(
   target_parameter = "level",
   aggregation = "eventstudy",
   treatment_type = "continuous",
-  dose_est_method = "parametric",
   control_group = "notyettreated",
-  base_period = "varying",
-  bstrap = TRUE,
-  boot_type = "multiplier",
-  biters = 1000,
-  cl = 1
+  biters = 100,
+  cband = TRUE,
+  num_knots = 0,
+  degree = 1,
 )
 
 summary(res_cont)
 
 ggcont_did(res_cont)
-
-# event study
-es_cont <- aggte(res_cont, type = "dynamic")
-ggdid(es_cont)
-
-
-
-packageVersion("contdid")
-args(contdid::cont_did)
 
 
 
