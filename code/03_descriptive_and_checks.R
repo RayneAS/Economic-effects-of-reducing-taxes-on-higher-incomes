@@ -63,9 +63,14 @@ colnames(panel)
 
 #Add filter because inequality data stats at 1980 
 #(before that there is a lot of missing values)
+panel[, year := as.integer(year)]
+
+stopifnot(is.integer(panel$year))
+
 panel <- panel[year >= 1980]
 
 panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
+stopifnot("Reform.Dummy" %in% names(panel))
 
 # unique_year <- sort(unique(panel$year))
 # unique_year
