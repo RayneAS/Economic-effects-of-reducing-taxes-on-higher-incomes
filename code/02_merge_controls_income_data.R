@@ -59,6 +59,10 @@ colnames(panel_oecd)
 unique_countries <- sort(unique(panel_oecd$Country))
 unique_countries
 
+panel_oecd[, year := as.integer(year)]
+
+stopifnot(is.integer(panel_oecd$year))
+
 
 #harmonize country names to merge
 panel_oecd[, Country := fifelse(Country == "Korea, Rep.", "Korea", Country)]
@@ -112,7 +116,12 @@ rubolino <- merge(dt2, omega, by = c("Year","Code","Country"), all.x = TRUE)
 
 rubolino <- rubolino[, ("Code") := NULL]
 
+rubolino[, Year := as.integer(Year)]
 
+stopifnot(is.integer(rubolino$Year))
+
+#check duplicates
+rubolino[, .N, by=.(Country, Year)][N>1]
 setorder(rubolino, Country, Year)
 
 
@@ -125,6 +134,8 @@ unique_countries <- sort(unique(panel_oecd$Country))
 unique_countries
 
 setnames(rubolino, "Year", "year")
+
+stopifnot(is.integer(rubolino$year))
 
 
 # 4 - Income database (World Inequality Database) -----------------------------
@@ -139,7 +150,12 @@ dt_income <- data.table(
 colnames(dt_income)
 dt_income <- dt_income[, ("Code") := NULL]
 
+
+dt_income[, year := as.integer(year)]
+
 setorder(dt_income, Country, year)
+
+stopifnot(is.integer(dt_income$year))
 
 
 unique_countries <- sort(unique(dt_income$Country))
