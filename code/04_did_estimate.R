@@ -11,7 +11,8 @@ packages <- c(
   "did",
   #"fastglm",
   "ggplot2",
-  "fixest"
+  "fixest",
+  "contdid"
 )
 
 
@@ -37,6 +38,7 @@ library(did)
 library(ggplot2)
 #library(fastglm)
 library(fixest)
+library(contdid)
 
 
 
@@ -64,10 +66,15 @@ colnames(panel)
 
 #Add filter because inequality data stats at 1980
 #(before that there is a lot of missing values)
+panel[, year := as.integer(year)]
+stopifnot(is.integer(panel$year))
+
 panel <- panel[year >= 1980]
 
 panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
 panel[is.na(Significant.Reform), Significant.Reform := 0L]
+stopifnot("Reform.Dummy" %in% names(panel))
+
 
 
 # 2 - Define auxiliar vars to did package ------------------------------------------------------
@@ -257,32 +264,16 @@ kbl(
 
 #check1
 
-setorder(panel, Code, year)
-
-panel[, post_adoption_zero := {
-  if (all(is.na(first_treat_year))) FALSE
-  else {
-    t0 <- first_treat_year[1]
-    if (is.na(t0)) FALSE
-    else any(Reform.Dummy[year >= t0] == 0, na.rm = TRUE)
-  }
-}, by = Code]
-
-panel[post_adoption_zero == TRUE, .(Country=unique(Country), 
-                                    first_treat_year=unique(first_treat_year))][]
-
-#check2
-
 panel[, notyet := as.integer(gvar == 0 | year < gvar)]
 panel[, .(n_notyet = uniqueN(Code[notyet==1]),
           n_treated_or_post = uniqueN(Code[notyet==0])),
       by = year][order(year)]
 
-#check3
+#check2
 
 panel[gvar>0, .N, by=gvar][order(gvar)]
 
-#check4
+#check3
 
 panel[gvar>0, .(n_countries = uniqueN(Code)), by=gvar][order(gvar)]
 
@@ -410,10 +401,88 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        height= 4, width = 6)
 
 
+#TESTESSSSSSSSSSSS--------------------------------------------------------
+#Treatment is omega intensity
+
+# dose as you want: level at adoption
+dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
+panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
+
+# 1) impute dose=0 for never-treated
+panel[gvar == 0, dose := 0]
+
+# 2) impute dose=0 for treated with Omega missing at adoption (Rubolino-imputed NA)
+panel[gvar > 0 & is.na(dose), dose := 0]
+
+# 3) continuous adoption: treated only if dose>0
+panel[, gvar_cont := fifelse(dose > 0, gvar, 0L)]
+
+# sanity checks required by contdid (time-invariant)
+stopifnot(panel[, all(uniqueN(dose) == 1L), by = Code]$V1 |> all())
+stopifnot(panel[, all(uniqueN(gvar_cont) == 1L), by = Code]$V1 |> all())
+
+# who switches to never-treated in continuous definition
+panel[gvar > 0 & gvar_cont == 0,
+      .(Country=unique(Country), gvar=unique(gvar), dose=unique(dose)),
+      by=Code][]
+
+
+# 1) dose constante por país
+panel[, .(uniq_dose = uniqueN(dose)), by = Code][uniq_dose != 1]
+
+# 2) gvar constante por país
+panel[, .(uniq_gvar = uniqueN(gvar)), by = Code][uniq_gvar != 1]
+
+# 3) never-treated: gvar==0 e dose time-invariant (0 ou NA, mas constante)
+panel[gvar == 0, .(uniq_dose = uniqueN(dose)), by = Code][uniq_dose != 1]
+
+
+panel[gvar > 0 & is.na(dose), .N, by = .(Code, Country)][order(-N)]
+
+
+# manter apenas variáveis necessárias
+vars_need <- c("Code", "year", "pt_share_top1", "dose", "gvar_cont")
+dt_cc <- panel[complete.cases(panel[, ..vars_need])]
+
+res_cont <- cont_did(
+  yname = "pt_share_top1",
+  dname = "dose",
+  gname = "gvar_cont",
+  tname = "year",
+  idname = "Code",
+  xformula = ~1,
+  data = dt_cc,
+  target_parameter = "level",
+  aggregation = "eventstudy",
+  treatment_type = "continuous",
+  dose_est_method = "parametric",
+  control_group = "notyettreated",
+  base_period = "varying",
+  bstrap = TRUE,
+  boot_type = "multiplier",
+  biters = 1000,
+  cl = 1
+)
+
+summary(res_cont)
+
+ggcont_did(res_cont)
+
+# event study
+es_cont <- aggte(res_cont, type = "dynamic")
+ggdid(es_cont)
+
+
+
+packageVersion("contdid")
+args(contdid::cont_did)
+
+
+
 # 5 - OLD FOR VARIABLE TESTES Continuous Treatment effect ------------------------------------------------------
 #Treatment is omega intensity
 
-# dose no primeiro evento: pegue Omega no ano gvar (por país) 
+# dose no primeiro evento: pegue Omega no ano gvar (por pais) 
 dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
 
 #View(panel[,list(Country, year, Reform.Dummy, treated_group)])
@@ -421,7 +490,7 @@ dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
 panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
 panel[gvar == 0, dose := 0]   # never-treated com dose 0
 
-#View(panel[,list(Country,Code, year, Reform.Dummy, gvar, dose, Omega)])
+View(panel[,list(Country,Code, year, Reform.Dummy, gvar, dose, Omega)])
 
 panel[gvar > 0 & is.na(dose), .N]
 panel[gvar == 0 & is.na(dose), .N]
@@ -717,3 +786,7 @@ kbl(
   save_kable(file = tex_out)
 
 message("Saved LaTeX table: ", tex_out)
+
+
+
+
