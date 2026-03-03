@@ -9,7 +9,6 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
-  #"fastglm",
   "ggplot2",
   "fixest",
   "contdid"
@@ -26,9 +25,6 @@ if (length(to_install) > 0) {
 invisible(lapply(packages, library, character.only = TRUE))
 
 
-# install.packages("fastglm", type = "source", 
-#                  repos = "https://cran.r-project.org")
-
 #PACKAGES USED
 library(data.table)
 library(readr)
@@ -36,7 +32,6 @@ library(knitr)
 library(kableExtra)
 library(did)
 library(ggplot2)
-#library(fastglm)
 library(fixest)
 library(contdid)
 
@@ -77,7 +72,7 @@ stopifnot("Reform.Dummy" %in% names(panel))
 
 
 
-# 2 - Define auxiliar vars to did package ------------------------------------------------------
+# 2 - Define auxiliary vars to did package ------------------------------------------------------
 
 setorder(panel, Code, year)
 
