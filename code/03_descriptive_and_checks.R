@@ -9,7 +9,6 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
-  #"fastglm",
   "ggplot2",
   "fixest"
 )
@@ -25,8 +24,7 @@ if (length(to_install) > 0) {
 invisible(lapply(packages, library, character.only = TRUE))
 
 
-# install.packages("fastglm", type = "source", 
-#                  repos = "https://cran.r-project.org")
+
 
 #PACKAGES USED
 library(data.table)
