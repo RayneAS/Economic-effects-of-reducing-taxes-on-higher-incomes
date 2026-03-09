@@ -118,6 +118,20 @@ panel[, gvar := first_treat_year]
 panel[is.na(gvar), gvar := 0]
 
 
+# garantir que gvar seja double
+panel[, gvar := as.numeric(gvar)]
+
+# checagens
+str(panel$gvar)
+panel[, .(
+  n_na_gvar = sum(is.na(gvar)),
+  n_inf_gvar = sum(is.infinite(gvar)),
+  min_gvar = min(gvar, na.rm = TRUE),
+  max_gvar = max(gvar, na.rm = TRUE)
+)]
+sort(unique(panel$gvar))
+
+
 # View(panel[,list(Country, year, id, Reform.Dummy,
 #                  treated_group,first_treat_year, gvar)])
 
@@ -332,7 +346,8 @@ summary(es)
 ggdid(es)
 
 
-p_es <- ggdid(es)
+p_es <- ggdid(es) +
+  labs(title = NULL)
 
 ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated.jpg"), 
        plot = p_es,
@@ -341,6 +356,7 @@ ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated.jpg"),
 
 #Event Studies
 # robustness: nevertreated
+
 att_gt_obj <- att_gt(
   yname = "pt_share_top1",
   tname = "year",
@@ -359,7 +375,8 @@ summary(es)
 
 ggdid(es)
 
-p_es <- ggdid(es)
+p_es <- ggdid(es) +
+  labs(title = NULL)
 
 ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated.jpg"), 
        plot = p_es,
@@ -389,7 +406,9 @@ att_gt_cond <- att_gt(
 es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
 summary(es_cond)
 
-p_cond <- ggdid(es_cond)
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
 p_cond
 
 
@@ -419,7 +438,9 @@ att_gt_cond <- att_gt(
 es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
 summary(es_cond)
 
-p_cond <- ggdid(es_cond)
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
 p_cond
 
 
@@ -427,4 +448,389 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        plot = p_cond,
        height= 4, width = 6)
 
+
+# 4.2 measure of inequality: d_share_top1-------------------------------
+
+
+#Unconditional----------------------------
+
+
+#Event Studies
+# main: notyettreated
+att_gt_obj <- att_gt(
+  yname = "d_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_pos_notyettreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+#Event Studies
+# robustness: nevertreated
+att_gt_obj <- att_gt(
+  yname = "d_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_pos_nevertreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+
+#Conditional ----------------------------------
+
+#Event Studies
+# main: notyettreated
+
+att_gt_cond <- att_gt(
+  yname = "d_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_pos_notyettreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_cond <- att_gt(
+  yname = "d_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_pos_nevertreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+# 4.3 measure of inequality: gini_pre_tax-------------------------------
+
+
+#Unconditional----------------------------
+
+
+#Event Studies
+# main: notyettreated
+att_gt_obj <- att_gt(
+  yname = "gini_pre_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_gini_pre_tax_notyettreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+#Event Studies
+# robustness: nevertreated
+att_gt_obj <- att_gt(
+  yname = "gini_pre_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_gini_pre_tax_nevertreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+
+#Conditional ----------------------------------
+
+#Event Studies
+# main: notyettreated
+
+att_gt_cond <- att_gt(
+  yname = "gini_pre_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_gini_pre_tax_notyettreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_cond <- att_gt(
+  yname = "gini_pre_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_gini_pre_tax_nevertreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+# 4.4 measure of inequality: gini_post_tax-------------------------------
+
+
+#Unconditional----------------------------
+
+
+#Event Studies
+# main: notyettreated
+att_gt_obj <- att_gt(
+  yname = "gini_post_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_gini_post_tax_notyettreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+#Event Studies
+# robustness: nevertreated
+att_gt_obj <- att_gt(
+  yname = "gini_post_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_gini_post_tax_nevertreated.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+
+#Conditional ----------------------------------
+
+#Event Studies
+# main: notyettreated
+
+att_gt_cond <- att_gt(
+  yname = "gini_post_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_gini_post_tax_notyettreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_cond <- att_gt(
+  yname = "gini_post_tax",
+  tname = "year",
+  idname = "id",
+  gname = "gvar",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_gini_post_tax_nevertreated_cond.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
 
