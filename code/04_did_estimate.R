@@ -42,8 +42,8 @@ library(contdid)
 user = "Rayne"
 
 if (user == "Rayne") {
-  data_dir <- "D:/rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
-  working_dir <- "D:/rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
+  data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
+  working_dir <- "C:/Users/Rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
 
 code_dir <- file.path(working_dir, "code")
