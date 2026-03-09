@@ -273,6 +273,38 @@ panel[gvar>0, .N, by=gvar][order(gvar)]
 panel[gvar>0, .(n_countries = uniqueN(Code)), by=gvar][order(gvar)]
 
 
+#Create table to report check 3
+# treatment cohorts
+cohort_treated <- panel[gvar > 0,
+                        .(Treated_countries = uniqueN(Code)),
+                        by = gvar]
+
+# number of not-yet-treated countries in each year
+controls_year <- panel[, .(Control_countries = uniqueN(Code[notyet == 1])),
+                       by = year]
+
+# merge the two
+cohort_table_full <- merge(cohort_treated,
+                           controls_year,
+                           by.x = "gvar",
+                           by.y = "year",
+                           all.x = TRUE)
+
+setnames(cohort_table_full, "gvar", "Reform_year")
+
+cohort_table_full <- cohort_table_full[order(Reform_year)]
+
+#latex
+kbl(
+  cohort_table_full,
+  format = "latex",
+  booktabs = TRUE,
+  align = "lrr",
+  caption = "Distribution of tax reform adoption and available control countries"
+) %>%
+  kable_styling(latex_options = "hold_position", font_size = 10)
+
+
 # 4.1 measure of inequality: pt_share_top1-------------------------------
 
 
