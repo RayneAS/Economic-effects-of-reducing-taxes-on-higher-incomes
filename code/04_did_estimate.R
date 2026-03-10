@@ -449,388 +449,284 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        height= 4, width = 6)
 
 
-# 4.2 measure of inequality: d_share_top1-------------------------------
+# 4.2  Reproducible DID pipeline-------------------------------
+#outcome
+# "pt_share_top1"
+# "d_share_top1"
+# "gini_pre_tax"
+# "gini_post_tax"
 
+#----------------------------------------------------------
+# 1. Settings
+#----------------------------------------------------------
 
-#Unconditional----------------------------
+# outcome_var <- "pt_share_top1"
+outcome_var <- "d_share_top1"
+# outcome_var <- "gini_pre_tax"
+# outcome_var <- "gini_post_tax"
 
+event_window <- list(min_e = -5, max_e = 10)
 
-#Event Studies
-# main: notyettreated
-att_gt_obj <- att_gt(
-  yname = "d_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "notyettreated"
+# labels for final table
+spec_labels <- c(
+  unc_notyet = "Unconditional / Not-yet-treated",
+  unc_never  = "Unconditional / Never-treated",
+  cond_notyet = "Conditional / Not-yet-treated",
+  cond_never  = "Conditional / Never-treated"
 )
 
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
+#----------------------------------------------------------
+# 2. Function to run one DID specification
+#----------------------------------------------------------
 
-summary(es)
+run_did_spec <- function(data,
+                         yname,
+                         control_group = c("notyettreated", "nevertreated"),
+                         xformla = NULL,
+                         est_method = NULL,
+                         panel = TRUE,
+                         min_e = -5,
+                         max_e = 10,
+                         faster_mode = NULL) {
+  
+  control_group <- match.arg(control_group)
+  
+  att_args <- list(
+    yname = yname,
+    tname = "year",
+    idname = "id",
+    gname = "gvar",
+    data = data,
+    panel = panel,
+    control_group = control_group
+  )
+  
+  if (!is.null(xformla)) {
+    att_args$xformla <- xformla
+  }
+  
+  if (!is.null(est_method)) {
+    att_args$est_method <- est_method
+  }
+  
+  if (!is.null(faster_mode)) {
+    att_args$faster_mode <- faster_mode
+  }
+  
+  att_obj <- do.call(att_gt, att_args)
+  
+  es_obj <- aggte(
+    att_obj,
+    type = "dynamic",
+    min_e = min_e,
+    max_e = max_e
+  )
+  
+  plot_obj <- ggdid(es_obj) +
+    labs(title = NULL)
+  
+  list(
+    att_gt = att_obj,
+    aggte = es_obj,
+    plot = plot_obj,
+    meta = list(
+      outcome = yname,
+      control_group = control_group,
+      xformla = xformla,
+      est_method = ifelse(is.null(est_method), "dr", est_method),
+      min_e = min_e,
+      max_e = max_e
+    )
+  )
+}
 
-ggdid(es)
+#----------------------------------------------------------
+# 3. Run all specifications and store in a named list
+#----------------------------------------------------------
 
+did_results <- list()
 
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_income_share1_pos_notyettreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-#Event Studies
-# robustness: nevertreated
-att_gt_obj <- att_gt(
-  yname = "d_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
+#Unconditional
+did_results[["unc_notyet"]] <- run_did_spec(
   data = panel,
-  panel = TRUE,
-  control_group = "nevertreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_income_share1_pos_nevertreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-
-#Conditional ----------------------------------
-
-#Event Studies
-# main: notyettreated
-
-att_gt_cond <- att_gt(
-  yname = "d_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac + working_age_pop,
-  data = panel,
-  panel = TRUE,
+  yname = outcome_var,
   control_group = "notyettreated",
-  est_method = "reg",
-  faster_mode = FALSE
+  xformla = NULL,
+  est_method = NULL,
+  min_e = event_window$min_e,
+  max_e = event_window$max_e
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_income_share1_pos_notyettreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-
-
-#Event Studies
-# robustness: nevertreated
-
-att_gt_cond <- att_gt(
-  yname = "d_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac + working_age_pop,
+did_results[["unc_never"]] <- run_did_spec(
   data = panel,
-  panel = TRUE,
+  yname = outcome_var,
   control_group = "nevertreated",
-  est_method = "reg",
-  faster_mode = FALSE
+  xformla = NULL,
+  est_method = NULL,
+  min_e = event_window$min_e,
+  max_e = event_window$max_e
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_income_share1_pos_nevertreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-
-# 4.3 measure of inequality: gini_pre_tax-------------------------------
-
-
-#Unconditional----------------------------
-
-
-#Event Studies
-# main: notyettreated
-att_gt_obj <- att_gt(
-  yname = "gini_pre_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
+#Conditional
+did_results[["cond_notyet"]] <- run_did_spec(
   data = panel,
-  panel = TRUE,
-  control_group = "notyettreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_gini_pre_tax_notyettreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-#Event Studies
-# robustness: nevertreated
-att_gt_obj <- att_gt(
-  yname = "gini_pre_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "nevertreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_gini_pre_tax_nevertreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-
-#Conditional ----------------------------------
-
-#Event Studies
-# main: notyettreated
-
-att_gt_cond <- att_gt(
-  yname = "gini_pre_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac + working_age_pop,
-  data = panel,
-  panel = TRUE,
+  yname = outcome_var,
   control_group = "notyettreated",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac + working_age_pop,
   est_method = "reg",
+  min_e = event_window$min_e,
+  max_e = event_window$max_e,
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_gini_pre_tax_notyettreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-
-
-#Event Studies
-# robustness: nevertreated
-
-att_gt_cond <- att_gt(
-  yname = "gini_pre_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac + working_age_pop,
+did_results[["cond_never"]] <- run_did_spec(
   data = panel,
-  panel = TRUE,
+  yname = outcome_var,
   control_group = "nevertreated",
-  est_method = "reg",
-  faster_mode = FALSE
-)
-
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_gini_pre_tax_nevertreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-# 4.4 measure of inequality: gini_post_tax-------------------------------
-
-
-#Unconditional----------------------------
-
-
-#Event Studies
-# main: notyettreated
-att_gt_obj <- att_gt(
-  yname = "gini_post_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "notyettreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_gini_post_tax_notyettreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-#Event Studies
-# robustness: nevertreated
-att_gt_obj <- att_gt(
-  yname = "gini_post_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  data = panel,
-  panel = TRUE,
-  control_group = "nevertreated"
-)
-
-es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
-            max_e = 10)
-
-summary(es)
-
-ggdid(es)
-
-p_es <- ggdid(es) +
-  labs(title = NULL)
-
-ggsave(file.path(figure_dir, "event_study_gini_post_tax_nevertreated.jpg"), 
-       plot = p_es,
-       height= 4, width = 6)
-
-
-
-#Conditional ----------------------------------
-
-#Event Studies
-# main: notyettreated
-
-att_gt_cond <- att_gt(
-  yname = "gini_post_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
   xformla = ~ log_gdp_pc + trade_frac +
     gross_fixed_capital_frac + working_age_pop,
-  data = panel,
-  panel = TRUE,
-  control_group = "notyettreated",
   est_method = "reg",
+  min_e = event_window$min_e,
+  max_e = event_window$max_e,
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
+#----------------------------------------------------------
+# 4. Print summaries if desired
+#----------------------------------------------------------
 
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
+invisible(lapply(names(did_results), function(nm) {
+  cat("\n====================================\n")
+  cat("Specification:", nm, "\n")
+  cat("====================================\n")
+  print(summary(did_results[[nm]]$aggte))
+}))
 
-p_cond
+#----------------------------------------------------------
+# 5. Save plots using the stored objects
+#----------------------------------------------------------
 
-
-ggsave(file.path(figure_dir, "event_study_gini_post_tax_notyettreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-
-
-#Event Studies
-# robustness: nevertreated
-
-att_gt_cond <- att_gt(
-  yname = "gini_post_tax",
-  tname = "year",
-  idname = "id",
-  gname = "gvar",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac + working_age_pop,
-  data = panel,
-  panel = TRUE,
-  control_group = "nevertreated",
-  est_method = "reg",
-  faster_mode = FALSE
+plot_files <- c(
+  unc_notyet  = "event_study_income_share1_notyettreated.jpg",
+  unc_never   = "event_study_income_share1_nevertreated.jpg",
+  cond_notyet = "event_study_income_share1_notyettreated_cond.jpg",
+  cond_never  = "event_study_income_share1_nevertreated_cond.jpg"
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
-summary(es_cond)
+invisible(lapply(names(plot_files), function(nm) {
+  ggsave(
+    filename = file.path(figure_dir, plot_files[[nm]]),
+    plot = did_results[[nm]]$plot,
+    height = 4,
+    width = 6
+  )
+}))
 
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
+#----------------------------------------------------------
+# 6. Helper function to extract one event-time estimate
+#----------------------------------------------------------
 
-p_cond
+get_event_est <- function(es_obj, e) {
+  idx <- which(es_obj$egt == e)
+  if (length(idx) == 0) return(NA_real_)
+  es_obj$att.egt[idx]
+}
 
+#----------------------------------------------------------
+# 7. Function to extract comparable results from each model
+#----------------------------------------------------------
 
-ggsave(file.path(figure_dir, "event_study_gini_post_tax_nevertreated_cond.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
+extract_did_summary <- function(result_obj, spec_name) {
+  
+  es <- result_obj$aggte
+  meta <- result_obj$meta
+  
+  data.table(
+    Specification = spec_name,
+    Control = ifelse(meta$control_group == "notyettreated",
+                     "Not-yet-treated", "Never-treated"),
+    Estimator = ifelse(meta$est_method == "reg",
+                       "Regression", "Doubly robust"),
+    `ATT` = es$overall.att,
+    `Std. Error` = es$overall.se,
+    `95% CI lower` = es$overall.att - 1.96 * es$overall.se,
+    `95% CI upper` = es$overall.att + 1.96 * es$overall.se,
+    `Impact (e = 0)` = get_event_est(es, 0),
+    `2 years after` = get_event_est(es, 2),
+    `5 years after` = get_event_est(es, 5),
+    `10 years after` = get_event_est(es, 10)
+  )
+}
 
+#----------------------------------------------------------
+# 8. Build table directly from stored objects
+#----------------------------------------------------------
+
+results_compare <- rbindlist(
+  lapply(names(did_results), function(nm) {
+    extract_did_summary(did_results[[nm]], spec_labels[[nm]])
+  }),
+  fill = TRUE
+)
+
+# round for presentation
+num_cols <- c(
+  "ATT", "Std. Error",
+  "95% CI lower", "95% CI upper",
+  "Impact (e = 0)", "2 years after",
+  "5 years after", "10 years after"
+)
+
+results_compare[, (num_cols) := lapply(.SD, round, 3), .SDcols = num_cols]
+
+results_compare[, Specification := fifelse(
+  grepl("Unconditional", Specification),
+  "Uncond.",
+  "Cond."
+)]
+
+results_compare[, Control := fifelse(
+  Control == "Not-yet-treated",
+  "Not-yet",
+  "Never"
+)]
+
+results_compare[, Estimator := fifelse(
+  Estimator == "Doubly robust",
+  "DR",
+  "OR"
+)]
+
+# optional pretty CI column
+results_compare[, `95% CI` := sprintf("[%0.3f, %0.3f]", `95% CI lower`, `95% CI upper`)]
+
+# optional significance flag
+results_compare[, Significant := fifelse(`95% CI lower` > 0 | `95% CI upper` < 0, 
+                                         "Yes", "No")]
+
+#----------------------------------------------------------
+# 9. Final paper-style table
+#----------------------------------------------------------
+
+results_table <- results_compare[, .(
+  Specification,
+  Control,
+  Estimator,
+  `ATT`,
+  `Std. Error`,
+  `95% CI`,
+  `Impact (e = 0)`,
+  `2 years after`,
+  `5 years after`,
+  `10 years after`,
+  Significant
+)]
+
+kbl(
+  results_table,
+  format = "latex",
+  booktabs = TRUE,
+  align = "lllrrrrrrrl"
+) %>%
+  kable_styling(latex_options = "hold_position", font_size = 10)
