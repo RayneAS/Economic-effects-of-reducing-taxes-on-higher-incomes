@@ -36,8 +36,6 @@ library(fixest)
 library(contdid)
 
 
-
-
 # Set user
 user = "Rayne"
 
