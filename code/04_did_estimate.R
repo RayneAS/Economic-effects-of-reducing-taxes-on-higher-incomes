@@ -448,26 +448,39 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond.jpg"),
        plot = p_cond,
        height= 4, width = 6)
 
+# 5 - DID Reproducible DID pipeline -----------------------------------------------
 
-# 4.2  Reproducible DID pipeline-------------------------------
 #outcome
 # "pt_share_top1"
 # "d_share_top1"
 # "gini_pre_tax"
 # "gini_post_tax"
 
-#----------------------------------------------------------
-# 1. Settings
-#----------------------------------------------------------
+# 5.1. Settings---------------------------------------------------------------------
 
-# outcome_var <- "pt_share_top1"
-outcome_var <- "d_share_top1"
-# outcome_var <- "gini_pre_tax"
-# outcome_var <- "gini_post_tax"
+outcome_var <- "pt_share_top1"
+#outcome_var <- "d_share_top1"
+#outcome_var <- "gini_pre_tax"
+#outcome_var <- "gini_post_tax"
 
 event_window <- list(min_e = -5, max_e = 10)
 
-# labels for final table
+outcome_tag <- switch(
+  outcome_var,
+  "pt_share_top1" = "income_share1_pretax",
+  "d_share_top1"  = "income_share1_posttax",
+  "gini_pre_tax"  = "gini_pretax",
+  "gini_post_tax" = "gini_posttax"
+)
+
+outcome_title <- switch(
+  outcome_var,
+  "pt_share_top1" = "top 1\\% pre-tax income share",
+  "d_share_top1"  = "top 1\\% post-tax income share",
+  "gini_pre_tax"  = "pre-tax Gini coefficient",
+  "gini_post_tax" = "post-tax Gini coefficient"
+)
+
 spec_labels <- c(
   unc_notyet = "Unconditional / Not-yet-treated",
   unc_never  = "Unconditional / Never-treated",
@@ -475,9 +488,7 @@ spec_labels <- c(
   cond_never  = "Conditional / Never-treated"
 )
 
-#----------------------------------------------------------
-# 2. Function to run one DID specification
-#----------------------------------------------------------
+# 5.2. unction to run one DID specification-----------------------------------------
 
 run_did_spec <- function(data,
                          yname,
@@ -540,9 +551,7 @@ run_did_spec <- function(data,
   )
 }
 
-#----------------------------------------------------------
-# 3. Run all specifications and store in a named list
-#----------------------------------------------------------
+# 5.3. Run all specifications and store in a named list------------------------------
 
 did_results <- list()
 
@@ -592,9 +601,8 @@ did_results[["cond_never"]] <- run_did_spec(
   faster_mode = FALSE
 )
 
-#----------------------------------------------------------
-# 4. Print summaries if desired
-#----------------------------------------------------------
+# 5.4. Print summaries---------------------------------------------------------------
+
 
 invisible(lapply(names(did_results), function(nm) {
   cat("\n====================================\n")
@@ -603,15 +611,13 @@ invisible(lapply(names(did_results), function(nm) {
   print(summary(did_results[[nm]]$aggte))
 }))
 
-#----------------------------------------------------------
-# 5. Save plots using the stored objects
-#----------------------------------------------------------
+# 5.5. Save plots using the stored objects-------------------------------------------
 
 plot_files <- c(
-  unc_notyet  = "event_study_income_share1_notyettreated.jpg",
-  unc_never   = "event_study_income_share1_nevertreated.jpg",
-  cond_notyet = "event_study_income_share1_notyettreated_cond.jpg",
-  cond_never  = "event_study_income_share1_nevertreated_cond.jpg"
+  unc_notyet  = paste0("event_study_", outcome_tag, "_notyettreated.jpg"),
+  unc_never   = paste0("event_study_", outcome_tag, "_nevertreated.jpg"),
+  cond_notyet = paste0("event_study_", outcome_tag, "_notyettreated_cond.jpg"),
+  cond_never  = paste0("event_study_", outcome_tag, "_nevertreated_cond.jpg")
 )
 
 invisible(lapply(names(plot_files), function(nm) {
@@ -623,9 +629,7 @@ invisible(lapply(names(plot_files), function(nm) {
   )
 }))
 
-#----------------------------------------------------------
-# 6. Helper function to extract one event-time estimate
-#----------------------------------------------------------
+# 5.6. Helper function to extract one event-time estimate----------------------------
 
 get_event_est <- function(es_obj, e) {
   idx <- which(es_obj$egt == e)
@@ -633,9 +637,8 @@ get_event_est <- function(es_obj, e) {
   es_obj$att.egt[idx]
 }
 
-#----------------------------------------------------------
-# 7. Function to extract comparable results from each model
-#----------------------------------------------------------
+# 5.7. Function to extract comparable results from each model------------------------
+
 
 extract_did_summary <- function(result_obj, spec_name) {
   
@@ -659,9 +662,7 @@ extract_did_summary <- function(result_obj, spec_name) {
   )
 }
 
-#----------------------------------------------------------
-# 8. Build table directly from stored objects
-#----------------------------------------------------------
+# 5.8. Build table directly from stored objects-------------------------------------
 
 results_compare <- rbindlist(
   lapply(names(did_results), function(nm) {
@@ -698,16 +699,14 @@ results_compare[, Estimator := fifelse(
   "OR"
 )]
 
-# optional pretty CI column
+# CI column
 results_compare[, `95% CI` := sprintf("[%0.3f, %0.3f]", `95% CI lower`, `95% CI upper`)]
 
-# optional significance flag
+#significance flag
 results_compare[, Significant := fifelse(`95% CI lower` > 0 | `95% CI upper` < 0, 
                                          "Yes", "No")]
 
-#----------------------------------------------------------
-# 9. Final paper-style table
-#----------------------------------------------------------
+# 5.9. Final paper-style table-------------------------------------------------------
 
 results_table <- results_compare[, .(
   Specification,
