@@ -36,8 +36,6 @@ library(fixest)
 library(contdid)
 
 
-
-
 # Set user
 user = "Rayne"
 
@@ -70,20 +68,10 @@ panel[is.na(Reform.Dummy), Reform.Dummy := 0L]
 panel[is.na(Significant.Reform), Significant.Reform := 0L]
 stopifnot("Reform.Dummy" %in% names(panel))
 
-
-
 # 2 - Define auxiliary vars to did package ------------------------------------------------------
+#Treatment is omega intensity
 
 setorder(panel, Code, year)
-
-# ever-treated indicator (country-level)
-panel[, treated_group := as.integer(any(Reform.Dummy == 1, na.rm = TRUE)), 
-      by = Code]
-
-#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
-panel[treated_group == 1, uniqueN(Country)]
-panel[, .N, by = treated_group]
-panel[treated_group == 1, uniqueN(Code)]
 
 #Define First of treatment (Tax reform)
 panel[, first_treat_year :=
@@ -92,23 +80,12 @@ panel[, first_treat_year :=
       else NA_integer_,
       by = Code]
 
-
-panel[Country=="Australia",
-      .(first_treat_year=unique(first_treat_year))]
-
-panel[Country=="Japan",
-      .(first_treat_year=unique(first_treat_year))]
-
-
 # Define pre-period flag
 panel[, pre_period := 0L]
 panel[treated_group == 1 & !is.na(first_treat_year) & 
         year < first_treat_year, pre_period := 1L]
 panel[treated_group == 0, pre_period := 1L]
 
-
-# View(panel[,list(Country, year, Reform.Dummy, pre_period,
-#                  treated_group, first_treat_year)])
 
 #Define country numeric id did package
 panel[, id := .GRP, by = Code]
@@ -117,20 +94,12 @@ panel[, id := .GRP, by = Code]
 panel[, gvar := first_treat_year]
 panel[is.na(gvar), gvar := 0]
 
-
-# View(panel[,list(Country, year, id, Reform.Dummy,
-#                  treated_group,first_treat_year, gvar)])
-
 #data checks
 panel[, .(
   n_units = uniqueN(id),
   n_treated = uniqueN(id[gvar > 0]),
   n_never = uniqueN(id[gvar == 0])
 )]
-
-# test <- panel[treated_group==1]
-# unique_countri <- unique(test$Country)
-# unique_countri
 
 panel[, uniqueN(gvar)]
 unique_g_var <- sort(unique(panel$gvar))
@@ -147,56 +116,18 @@ check_gvar <- panel[gvar > 0,
 
 check_gvar[gvar_unique != min_year_treated]
 
-# 3 - Baseline (pre-treatment) summary stats at COUNTRY level------------------------------------------
 
-vars_baseline <- c(
-  # outcome
-  "pt_share_top1",
-  "d_share_top1",
-  "gini_pre_tax",
-  "gini_post_tax",
-  
-  # controls
-  "log_gdp_pc",
-  "trade_frac",
-  "tax_revenue_frac",
-  "gross_fixed_capital_frac",
-  "working_age_pop"
-)
-
-#define labels
-var_labels <- c(
-  pt_share_top1           = "Top 1% income share (pre-tax)",
-  d_share_top1            = "Top 1% income share (post-tax)",
-  gini_pre_tax            = "Gini coefficient (pre-tax income)",
-  gini_post_tax           = "Gini coefficient (pos-tax income)",
-  Reform.Dummy            = "Tax reform indicator",
-  log_gdp_pc              = "Log GDP per capita",
-  trade_frac              = "Trade openness",
-  tax_revenue_frac        = "Tax revenue",
-  gross_fixed_capital_frac= "Gross fixed capital formation",
-  working_age_pop         = "Working-age population"
-)
-
-missing_vars <- setdiff(vars_baseline, names(panel))
-if (length(missing_vars) > 0) {
-  stop("Variáveis ausentes em vars_baseline: ", paste(missing_vars, collapse = ", "))
-}
-
-#TESTESSSSSSSSSSSS--------------------------------------------------------
-#Treatment is omega intensity
-
-# dose as you want: level at adoption
+# dose as level at adoption
 dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
 panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
 
-# 1) impute dose=0 for never-treated
+#dose=0 for never-treated
 panel[gvar == 0, dose := 0]
 
-# 2) impute dose=0 for treated with Omega missing at adoption (Rubolino-imputed NA)
+#dose=0 for treated with Omega missing at adoption (Rubolino-imputed NA)
 panel[gvar > 0 & is.na(dose), dose := 0]
 
-# 3) continuous adoption: treated only if dose>0
+#continuous adoption: treated only if dose>0
 panel[, gvar_cont := fifelse(dose > 0, gvar, 0L)]
 
 
@@ -251,15 +182,6 @@ summary(res_cont)
 
 ggcont_did(res_cont)
 
-
-
-# 5 - OLD FOR VARIABLE TESTES Continuous Treatment effect ------------------------------------------------------
-#Treatment is omega intensity
-
-# dose no primeiro evento: pegue Omega no ano gvar (por pais) 
-dose_dt <- panel[gvar > 0 & year == gvar, .(dose = -Omega), by = Code]
-
-#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
 
 panel <- merge(panel, dose_dt, by = "Code", all.x = TRUE)
 panel[gvar == 0, dose := 0]   # never-treated com dose 0
@@ -330,21 +252,6 @@ iplot(m0, ref.line = 0,
       main = "Event study (dose)")
 
 dev.off()
-
-#ESTIMATION - sem controles
-# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
-#omitindo e=-1
-m1 <- feols(
-  pt_share_top1 ~ i(e, dose, ref = -1) |
-    Code + year ,
-  data = dt_es, cluster = "Code"
-)
-
-
-summary(m1)
-
-#plot
-iplot(m1)
 
 
 
