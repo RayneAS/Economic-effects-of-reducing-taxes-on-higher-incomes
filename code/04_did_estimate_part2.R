@@ -684,6 +684,7 @@ nrow(dt_es[complete.cases(
   log_gdp_pc,
   trade_frac,
   gross_fixed_capital_frac,
+  gross_savings_frac,
   working_age_pop
 )])
 
@@ -717,3 +718,48 @@ iplot(m0, ref.line = 0,
       main = "Event study (dose)")
 
 dev.off()
+
+
+#latex table
+tab_twfe <- etable(
+  m0,
+  tex = TRUE,
+  digits = 3,
+  se.below = TRUE,
+  fitstat = ~ n + rmse + ar2 + war2,
+  dict = c(
+    "e::-5:dose" = "Event time -5 $\\times$ dose",
+    "e::-4:dose" = "Event time -4 $\\times$ dose",
+    "e::-3:dose" = "Event time -3 $\\times$ dose",
+    "e::-2:dose" = "Event time -2 $\\times$ dose",
+    "e::0:dose"  = "Event time 0 $\\times$ dose",
+    "e::1:dose"  = "Event time 1 $\\times$ dose",
+    "e::2:dose"  = "Event time 2 $\\times$ dose",
+    "e::3:dose"  = "Event time 3 $\\times$ dose",
+    "e::4:dose"  = "Event time 4 $\\times$ dose",
+    "e::5:dose"  = "Event time 5 $\\times$ dose",
+    "e::6:dose"  = "Event time 6 $\\times$ dose",
+    "e::7:dose"  = "Event time 7 $\\times$ dose",
+    "e::8:dose"  = "Event time 8 $\\times$ dose",
+    "e::9:dose"  = "Event time 9 $\\times$ dose",
+    "e::10:dose" = "Event time 10 $\\times$ dose",
+    "log_gdp_pc" = "Log GDP per capita",
+    "trade_frac" = "Trade openness",
+    "gross_fixed_capital_frac" = "Gross fixed capital formation",
+    "gross_savings_frac" = "Gross savings",
+    "working_age_pop" = "Working-age population"
+  ),
+  drop = "Intercept",
+  title = "TWFE event-study with continuous treatment intensity: Top 1\\% income share (pre-tax)",
+  label = "tab:twfe_continuous_pretax",
+  notes = c(
+    "The dependent variable is the pre-tax top 1\\% income share.",
+    "The omitted event time is $e=-1$.",
+    "All specifications include country and year fixed effects.",
+    "Standard errors clustered at the country level."
+  )
+)
+
+tab_twfe
+
+cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
