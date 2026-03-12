@@ -565,7 +565,7 @@ tab_es_4 <- es_win[, .(
   hi   = round(hi, 4)
 )]
 
-tab_es_4[, outcome := "Gini pre tax"]
+tab_es_4[, outcome := "Gini post tax"]
 
 
 #test
@@ -585,8 +585,6 @@ pval
 
 
 # 3.5. Produce table and salve results--------------------------------------------
-
-
 tab_final <- rbind(tab_es_1,tab_es_2) 
 tab_final <- rbind(tab_final,tab_es_3) 
 tab_final <- rbind(tab_final,tab_es_4) 
@@ -596,8 +594,74 @@ fwrite(tab_final,
        file.path(data_dir, paste0("results_event_study_dose_contdid.csv")),
        sep = ",")
 
+#create table with some results
+
+e_keep <- c(-5, -1, 0, 1, 5, 10)
+
+tab_sel <- copy(tab_final[e %in% e_keep])
+
+#rename for table 
+tab_sel[, outcome := fcase(
+  outcome == "Income share 1% pre tax",  "Top 1\\% share pre-tax",
+  outcome == "Income share 1% post tax", "Top 1\\% share post-tax",
+  outcome == "Gini pre tax",             "Gini pre-tax",
+  outcome == "Gini post tax",            "Gini post-tax",
+  default = outcome
+)]
+
+#check
+tab_sel[, .N, by = .(e, outcome)][order(outcome, e)]
+
+#select order of columns
+tab_sel[, outcome := factor(
+  outcome,
+  levels = c(
+    "Top 1\\% share pre-tax",
+    "Top 1\\% share post-tax",
+    "Gini pre-tax",
+    "Gini post-tax"
+  )
+)]
+
+#coef + se
+tab_sel[, cell := paste0(
+  sprintf("%.4f", coef),
+  " (", sprintf("%.4f", se), ")"
+)]
+
+# wide
+tab_wide <- dcast(
+  tab_sel,
+  e ~ outcome,
+  value.var = "cell"
+)
+
+setorder(tab_wide, e)
+
+tab_wide
+
+#table
+latex_tab <- kbl(
+  tab_wide,
+  format = "latex",
+  booktabs = TRUE,
+  align = c("r", "l", "l", "l", "l"),
+  caption = "Selected event-study estimates by outcome",
+  label = "event_study_compact",
+  escape = FALSE
+) %>%
+  kable_styling(
+    latex_options = c("hold_position", "scale_down"),
+    font_size = 9
+  )
+
+writeLines(
+  as.character(latex_tab),
+  file.path(data_dir, "tab_event_study_compact.tex")
+)
 
 
+latex_tab
 
 
 # 4 - TWFE event-study with continuous treatment intensity controls ------------------
