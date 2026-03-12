@@ -172,9 +172,12 @@ table(is.na(panel$gross_savings_frac))
 
 #Treatment is omega intensity 
 
+# 3.1. Income share pre tax------------------------------------------------------
+
 vars_need <- c("Code", "year", "pt_share_top1", "dose", "gvar_cont")
 dt_cc <- panel[complete.cases(panel[, ..vars_need])]
 
+dt_cc[, .N, by = Code][, table(N)]
 
 res_cont <- cont_did(
   yname = "pt_share_top1",
@@ -221,7 +224,7 @@ es_win <- es[e >= -5 & e <= 10]
 
 #plot figure with selected legs and leads
 
-png(file.path(figure_dir, "event_study_dose_share_income1_contdid.png"),
+png(file.path(figure_dir, "event_study_dose_share_income1_pretax_contdid.png"),
     width = 1600, height = 1000, res = 200)
 
 ggplot(es_win, aes(x = e, y = att)) +
@@ -245,7 +248,7 @@ ggplot(es_win, aes(x = e, y = att)) +
 dev.off()
 
 #table
-tab_es <- es_win[, .(
+tab_es_1 <- es_win[, .(
   e,
   coef = round(att, 4),
   se   = round(se, 4),
@@ -253,7 +256,7 @@ tab_es <- es_win[, .(
   hi   = round(hi, 4)
 )]
 
-tab_es
+tab_es_1[, outcome := "Income share 1% pre tax"]
 
 
 #test
@@ -270,6 +273,331 @@ pval <- 1 - pchisq(W, df)
 
 W
 pval
+
+
+# 3.2. Income share post tax------------------------------------------------------
+
+vars_need <- c("Code", "year", "d_share_top1", "dose", "gvar_cont")
+dt_cc <- panel[complete.cases(panel[, ..vars_need])]
+
+dt_cc[, .N, by = Code][, table(N)]
+
+res_cont <- cont_did(
+  yname = "d_share_top1",
+  dname = "dose",
+  gname = "gvar_cont",
+  tname = "year",
+  idname = "Code",
+  xformula = ~1,
+  data = dt_cc,
+  target_parameter = "level",
+  aggregation = "eventstudy",
+  treatment_type = "continuous",
+  control_group = "notyettreated",
+  biters = 999,
+  cband = TRUE,
+  num_knots = 2,
+  degree = 1,
+)
+
+summary(res_cont)
+
+ggcont_did(res_cont)
+
+#checks
+names(res_cont)
+names(res_cont$event_study)
+str(res_cont$event_study, max.level = 1)
+
+#extract estimated values
+es <- data.table(
+  e   = res_cont$event_study$egt,
+  att = res_cont$event_study$att.egt,
+  se  = res_cont$event_study$se.egt
+)
+
+crit <- unname(res_cont$event_study$crit.val.egt)
+
+es[, `:=`(
+  lo = att - crit * se,
+  hi = att + crit * se
+)]
+
+es_win <- es[e >= -5 & e <= 10]
+
+#plot figure with selected legs and leads
+
+png(file.path(figure_dir, "event_study_dose_share_income1_posttax_contdid.png"),
+    width = 1600, height = 1000, res = 200)
+
+ggplot(es_win, aes(x = e, y = att)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi),
+              fill = "gray80", alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_line(linewidth = 0.8, color = "black") +
+  geom_point(size = 2, color = "black") +
+  scale_x_continuous(breaks = seq(-5, 10, by = 1)) +
+  labs(
+    x = "Event time",
+    y = "ATT"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(color = "black")
+  )
+
+dev.off()
+
+#table
+tab_es_2 <- es_win[, .(
+  e,
+  coef = round(att, 4),
+  se   = round(se, 4),
+  lo   = round(lo, 4),
+  hi   = round(hi, 4)
+)]
+
+tab_es_2[, outcome := "Income share 1% post tax"]
+
+
+
+#test
+pre_idx <- which(es$e >= -5 & es$e <= -1)
+beta <- es$att[pre_idx]
+
+IFmat <- res_cont$event_study$inf.function$dynamic.inf.func.e
+
+V <- cov(IFmat[, pre_idx, drop = FALSE])
+
+W <- as.numeric(t(beta) %*% solve(V) %*% beta)
+df <- length(beta)
+pval <- 1 - pchisq(W, df)
+
+W
+pval
+
+# 3.3. Gini pre tax------------------------------------------------------
+
+vars_need <- c("Code", "year", "gini_pre_tax", "dose", "gvar_cont")
+dt_cc <- panel[complete.cases(panel[, ..vars_need])]
+
+dt_cc[, .N, by = Code][, table(N)]
+
+res_cont <- cont_did(
+  yname = "gini_pre_tax",
+  dname = "dose",
+  gname = "gvar_cont",
+  tname = "year",
+  idname = "Code",
+  xformula = ~1,
+  data = dt_cc,
+  target_parameter = "level",
+  aggregation = "eventstudy",
+  treatment_type = "continuous",
+  control_group = "notyettreated",
+  biters = 999,
+  cband = TRUE,
+  num_knots = 2,
+  degree = 1,
+)
+
+summary(res_cont)
+
+ggcont_did(res_cont)
+
+#checks
+names(res_cont)
+names(res_cont$event_study)
+str(res_cont$event_study, max.level = 1)
+
+#extract estimated values
+es <- data.table(
+  e   = res_cont$event_study$egt,
+  att = res_cont$event_study$att.egt,
+  se  = res_cont$event_study$se.egt
+)
+
+crit <- unname(res_cont$event_study$crit.val.egt)
+
+es[, `:=`(
+  lo = att - crit * se,
+  hi = att + crit * se
+)]
+
+es_win <- es[e >= -5 & e <= 10]
+
+#plot figure with selected legs and leads
+
+png(file.path(figure_dir, "event_study_dose_gini_pretax_contdid.png"),
+    width = 1600, height = 1000, res = 200)
+
+ggplot(es_win, aes(x = e, y = att)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi),
+              fill = "gray80", alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_line(linewidth = 0.8, color = "black") +
+  geom_point(size = 2, color = "black") +
+  scale_x_continuous(breaks = seq(-5, 10, by = 1)) +
+  labs(
+    x = "Event time",
+    y = "ATT"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(color = "black")
+  )
+
+dev.off()
+
+#table
+tab_es_3 <- es_win[, .(
+  e,
+  coef = round(att, 4),
+  se   = round(se, 4),
+  lo   = round(lo, 4),
+  hi   = round(hi, 4)
+)]
+
+tab_es_3[, outcome := "Gini pre tax"]
+
+
+#test
+pre_idx <- which(es$e >= -5 & es$e <= -1)
+beta <- es$att[pre_idx]
+
+IFmat <- res_cont$event_study$inf.function$dynamic.inf.func.e
+
+V <- cov(IFmat[, pre_idx, drop = FALSE])
+
+W <- as.numeric(t(beta) %*% solve(V) %*% beta)
+df <- length(beta)
+pval <- 1 - pchisq(W, df)
+
+W
+pval
+
+
+# 3.4. Gini post tax------------------------------------------------------
+
+vars_need <- c("Code", "year", "gini_post_tax", "dose", "gvar_cont")
+dt_cc <- panel[complete.cases(panel[, ..vars_need])]
+
+dt_cc[, .N, by = Code][, table(N)]
+
+res_cont <- cont_did(
+  yname = "gini_post_tax",
+  dname = "dose",
+  gname = "gvar_cont",
+  tname = "year",
+  idname = "Code",
+  xformula = ~1,
+  data = dt_cc,
+  target_parameter = "level",
+  aggregation = "eventstudy",
+  treatment_type = "continuous",
+  control_group = "notyettreated",
+  biters = 999,
+  cband = TRUE,
+  num_knots = 2,
+  degree = 1,
+)
+
+summary(res_cont)
+
+ggcont_did(res_cont)
+
+#checks
+names(res_cont)
+names(res_cont$event_study)
+str(res_cont$event_study, max.level = 1)
+
+#extract estimated values
+es <- data.table(
+  e   = res_cont$event_study$egt,
+  att = res_cont$event_study$att.egt,
+  se  = res_cont$event_study$se.egt
+)
+
+crit <- unname(res_cont$event_study$crit.val.egt)
+
+es[, `:=`(
+  lo = att - crit * se,
+  hi = att + crit * se
+)]
+
+es_win <- es[e >= -5 & e <= 10]
+
+#plot figure with selected legs and leads
+
+png(file.path(figure_dir, "event_study_dose_gini_posttax_contdid.png"),
+    width = 1600, height = 1000, res = 200)
+
+ggplot(es_win, aes(x = e, y = att)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi),
+              fill = "gray80", alpha = 0.4) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_vline(xintercept = -0.5, linetype = "dashed", linewidth = 0.5, color = "gray40") +
+  geom_line(linewidth = 0.8, color = "black") +
+  geom_point(size = 2, color = "black") +
+  scale_x_continuous(breaks = seq(-5, 10, by = 1)) +
+  labs(
+    x = "Event time",
+    y = "ATT"
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(color = "black")
+  )
+
+dev.off()
+
+#table
+tab_es_4 <- es_win[, .(
+  e,
+  coef = round(att, 4),
+  se   = round(se, 4),
+  lo   = round(lo, 4),
+  hi   = round(hi, 4)
+)]
+
+tab_es_4[, outcome := "Gini pre tax"]
+
+
+#test
+pre_idx <- which(es$e >= -5 & es$e <= -1)
+beta <- es$att[pre_idx]
+
+IFmat <- res_cont$event_study$inf.function$dynamic.inf.func.e
+
+V <- cov(IFmat[, pre_idx, drop = FALSE])
+
+W <- as.numeric(t(beta) %*% solve(V) %*% beta)
+df <- length(beta)
+pval <- 1 - pchisq(W, df)
+
+W
+pval
+
+
+# 3.5. Produce table and salve results--------------------------------------------
+
+
+tab_final <- rbind(tab_es_1,tab_es_2) 
+tab_final <- rbind(tab_final,tab_es_3) 
+tab_final <- rbind(tab_final,tab_es_4) 
+
+#save results
+fwrite(tab_final,
+       file.path(data_dir, paste0("results_event_study_dose_contdid.csv")),
+       sep = ",")
+
+
+
 
 
 # 4 - TWFE event-study with continuous treatment intensity controls ------------------
