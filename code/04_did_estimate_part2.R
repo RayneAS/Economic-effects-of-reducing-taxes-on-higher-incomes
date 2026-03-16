@@ -41,6 +41,7 @@ user = "Rayne"
 
 if (user == "Rayne") {
   data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
+  results_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/resultados/part_1"
   working_dir <- "C:/Users/Rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
 
@@ -583,7 +584,6 @@ pval <- 1 - pchisq(W, df)
 W
 pval
 
-
 # 3.5. Produce table and salve results--------------------------------------------
 tab_final <- rbind(tab_es_1,tab_es_2) 
 tab_final <- rbind(tab_final,tab_es_3) 
@@ -591,7 +591,12 @@ tab_final <- rbind(tab_final,tab_es_4)
 
 #save results
 fwrite(tab_final,
-       file.path(data_dir, paste0("results_event_study_dose_contdid.csv")),
+       file.path(results_dir, paste0("results_event_study_dose_contdid.csv")),
+       sep = ",")
+
+#save results
+fwrite(tab_final,
+       file.path(results_dir, paste0("results_event_study_dose_contdid.xlsx")),
        sep = ",")
 
 #create table with some results
@@ -662,104 +667,3 @@ writeLines(
 
 
 latex_tab
-
-
-# 4 - TWFE event-study with continuous treatment intensity controls ------------------
-
-#Treatment is omega intensity 
-
-# 4.1. Income share pre tax------------------------------------------------------
-
-#part2: Treatment is omega intensity and we estimate with TWFE
-
-panel[gvar > 0, e := year - gvar]
-panel[gvar == 0, e := 0L] # never-treated não tem event time
-
-#selected leds and lags
-dt_es <- panel[(gvar == 0) | (e >= -5 & e <= 10)]
-
-nrow(dt_es[complete.cases(
-  pt_share_top1,
-  dose,
-  log_gdp_pc,
-  trade_frac,
-  gross_fixed_capital_frac,
-  gross_savings_frac,
-  working_age_pop
-)])
-
-panel[gvar > 0 & is.na(dose), .N]
-
-
-
-#ESTIMATION
-# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
-#omitindo e=-1
-m0 <- feols(
-  pt_share_top1 ~ i(e, dose, ref = -1) +
-    log_gdp_pc + trade_frac + gross_fixed_capital_frac + gross_savings_frac + 
-    working_age_pop |
-    Code + year,
-  data = dt_es, cluster = "Code"
-)
-
-
-summary(m0)
-
-#plot
-iplot(m0)
-
-png(file.path(figure_dir, "event_study_dose_share_income1_pretax_TWFE.png"),
-    width = 1600, height = 1000, res = 200)
-
-iplot(m0, ref.line = 0,
-      xlab = "Event time (e)",
-      ylab = "Effect per unit of dose",
-      main = "Event study (dose)")
-
-dev.off()
-
-
-#latex table
-tab_twfe <- etable(
-  m0,
-  tex = TRUE,
-  digits = 3,
-  se.below = TRUE,
-  fitstat = ~ n + rmse + ar2 + war2,
-  dict = c(
-    "e::-5:dose" = "Event time -5 $\\times$ dose",
-    "e::-4:dose" = "Event time -4 $\\times$ dose",
-    "e::-3:dose" = "Event time -3 $\\times$ dose",
-    "e::-2:dose" = "Event time -2 $\\times$ dose",
-    "e::0:dose"  = "Event time 0 $\\times$ dose",
-    "e::1:dose"  = "Event time 1 $\\times$ dose",
-    "e::2:dose"  = "Event time 2 $\\times$ dose",
-    "e::3:dose"  = "Event time 3 $\\times$ dose",
-    "e::4:dose"  = "Event time 4 $\\times$ dose",
-    "e::5:dose"  = "Event time 5 $\\times$ dose",
-    "e::6:dose"  = "Event time 6 $\\times$ dose",
-    "e::7:dose"  = "Event time 7 $\\times$ dose",
-    "e::8:dose"  = "Event time 8 $\\times$ dose",
-    "e::9:dose"  = "Event time 9 $\\times$ dose",
-    "e::10:dose" = "Event time 10 $\\times$ dose",
-    "log_gdp_pc" = "Log GDP per capita",
-    "trade_frac" = "Trade openness",
-    "gross_fixed_capital_frac" = "Gross fixed capital formation",
-    "gross_savings_frac" = "Gross savings",
-    "working_age_pop" = "Working-age population"
-  ),
-  drop = "Intercept",
-  title = "TWFE event-study with continuous treatment intensity: Top 1\\% income share (pre-tax)",
-  label = "tab:twfe_continuous_pretax",
-  notes = c(
-    "The dependent variable is the pre-tax top 1\\% income share.",
-    "The omitted event time is $e=-1$.",
-    "All specifications include country and year fixed effects.",
-    "Standard errors clustered at the country level."
-  )
-)
-
-tab_twfe
-
-cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
