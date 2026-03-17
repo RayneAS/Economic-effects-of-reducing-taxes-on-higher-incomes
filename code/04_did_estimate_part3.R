@@ -267,4 +267,233 @@ tab_twfe <- etable(
 
 tab_twfe
 
-cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
+#cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
+
+
+## 3.2. Income share post tax------------------------------------------------------
+
+#ESTIMATION
+# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
+#omitindo e=-1
+m0 <- feols(
+  d_share_top1 ~ i(e, dose, ref = -1) +
+    log_gdp_pc + trade_frac + gross_fixed_capital_frac + gross_savings_frac + 
+    working_age_pop |
+    Code + year,
+  data = dt_es, cluster = "Code"
+)
+
+
+summary(m0)
+
+#plot
+iplot(m0)
+
+png(file.path(figure_dir, "event_study_dose_share_income1_post_TWFE.png"),
+    width = 1600, height = 1000, res = 200)
+
+iplot(m0, ref.line = 0,
+      xlab = "Event time (e)",
+      ylab = "Effect per unit of dose",
+      main = "Event study (dose)")
+
+dev.off()
+
+
+#latex table
+tab_twfe <- etable(
+  m0,
+  tex = TRUE,
+  digits = 3,
+  se.below = TRUE,
+  fitstat = ~ n + rmse + ar2 + war2,
+  dict = c(
+    "e::-5:dose" = "Event time -5 $\\times$ dose",
+    "e::-4:dose" = "Event time -4 $\\times$ dose",
+    "e::-3:dose" = "Event time -3 $\\times$ dose",
+    "e::-2:dose" = "Event time -2 $\\times$ dose",
+    "e::0:dose"  = "Event time 0 $\\times$ dose",
+    "e::1:dose"  = "Event time 1 $\\times$ dose",
+    "e::2:dose"  = "Event time 2 $\\times$ dose",
+    "e::3:dose"  = "Event time 3 $\\times$ dose",
+    "e::4:dose"  = "Event time 4 $\\times$ dose",
+    "e::5:dose"  = "Event time 5 $\\times$ dose",
+    "e::6:dose"  = "Event time 6 $\\times$ dose",
+    "e::7:dose"  = "Event time 7 $\\times$ dose",
+    "e::8:dose"  = "Event time 8 $\\times$ dose",
+    "e::9:dose"  = "Event time 9 $\\times$ dose",
+    "e::10:dose" = "Event time 10 $\\times$ dose",
+    "log_gdp_pc" = "Log GDP per capita",
+    "trade_frac" = "Trade openness",
+    "gross_fixed_capital_frac" = "Gross fixed capital formation",
+    "gross_savings_frac" = "Gross savings",
+    "working_age_pop" = "Working-age population"
+  ),
+  drop = "Intercept",
+  title = "TWFE event-study with continuous treatment intensity: Top 1\\% income share (post-tax)",
+  label = "tab:twfe_continuous_pretax",
+  notes = c(
+    "The dependent variable is the pre-tax top 1\\% income share.",
+    "The omitted event time is $e=-1$.",
+    "All specifications include country and year fixed effects.",
+    "Standard errors clustered at the country level."
+  )
+)
+
+tab_twfe
+
+#cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
+
+
+# 3.3. Gini pre tax------------------------------------------------------
+
+#ESTIMATION
+# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
+#omitindo e=-1
+m0 <- feols(
+  gini_pre_tax ~ i(e, dose, ref = -1) +
+    log_gdp_pc + trade_frac + gross_fixed_capital_frac + gross_savings_frac + 
+    working_age_pop |
+    Code + year,
+  data = dt_es, cluster = "Code"
+)
+
+
+summary(m0)
+
+#plot
+iplot(m0)
+
+png(file.path(figure_dir, "event_study_dose_gini_pretax_TWFE.png"),
+    width = 1600, height = 1000, res = 200)
+
+iplot(m0, ref.line = 0,
+      xlab = "Event time (e)",
+      ylab = "Effect per unit of dose",
+      main = "Event study (dose)")
+
+dev.off()
+
+summary(dt_es$dose)
+
+#latex table
+tab_twfe <- etable(
+  m0,
+  tex = TRUE,
+  digits = 3,
+  se.below = TRUE,
+  fitstat = ~ n + rmse + ar2 + war2,
+  dict = c(
+    "e::-5:dose" = "Event time -5 $\\times$ dose",
+    "e::-4:dose" = "Event time -4 $\\times$ dose",
+    "e::-3:dose" = "Event time -3 $\\times$ dose",
+    "e::-2:dose" = "Event time -2 $\\times$ dose",
+    "e::0:dose"  = "Event time 0 $\\times$ dose",
+    "e::1:dose"  = "Event time 1 $\\times$ dose",
+    "e::2:dose"  = "Event time 2 $\\times$ dose",
+    "e::3:dose"  = "Event time 3 $\\times$ dose",
+    "e::4:dose"  = "Event time 4 $\\times$ dose",
+    "e::5:dose"  = "Event time 5 $\\times$ dose",
+    "e::6:dose"  = "Event time 6 $\\times$ dose",
+    "e::7:dose"  = "Event time 7 $\\times$ dose",
+    "e::8:dose"  = "Event time 8 $\\times$ dose",
+    "e::9:dose"  = "Event time 9 $\\times$ dose",
+    "e::10:dose" = "Event time 10 $\\times$ dose",
+    "log_gdp_pc" = "Log GDP per capita",
+    "trade_frac" = "Trade openness",
+    "gross_fixed_capital_frac" = "Gross fixed capital formation",
+    "gross_savings_frac" = "Gross savings",
+    "working_age_pop" = "Working-age population"
+  ),
+  drop = "Intercept",
+  title = "TWFE event-study with continuous treatment intensity: Top 1\\% income share (post-tax)",
+  label = "tab:twfe_continuous_pretax",
+  notes = c(
+    "The dependent variable is the pre-tax top 1\\% income share.",
+    "The omitted event time is $e=-1$.",
+    "All specifications include country and year fixed effects.",
+    "Standard errors clustered at the country level."
+  )
+)
+
+tab_twfe
+
+#cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
+
+
+# 3.4. Gini post tax------------------------------------------------------
+
+#ESTIMATION
+# Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
+#omitindo e=-1
+m0 <- feols(
+  gini_post_tax ~ i(e, dose, ref = -1) +
+    log_gdp_pc + trade_frac + gross_fixed_capital_frac + gross_savings_frac + 
+    working_age_pop |
+    Code + year,
+  data = dt_es, cluster = "Code"
+)
+
+
+summary(m0)
+summary(dt_es$dose)
+
+#plot
+iplot(m0)
+
+png(file.path(figure_dir, "event_study_dose_gini_posttax_TWFE.png"),
+    width = 1600, height = 1000, res = 200)
+
+iplot(m0, ref.line = 0,
+      xlab = "Event time (e)",
+      ylab = "Effect per unit of dose",
+      main = "Event study (dose)")
+
+dev.off()
+
+
+summary(dt_es$dose)
+
+#latex table
+tab_twfe <- etable(
+  m0,
+  tex = TRUE,
+  digits = 3,
+  se.below = TRUE,
+  fitstat = ~ n + rmse + ar2 + war2,
+  dict = c(
+    "e::-5:dose" = "Event time -5 $\\times$ dose",
+    "e::-4:dose" = "Event time -4 $\\times$ dose",
+    "e::-3:dose" = "Event time -3 $\\times$ dose",
+    "e::-2:dose" = "Event time -2 $\\times$ dose",
+    "e::0:dose"  = "Event time 0 $\\times$ dose",
+    "e::1:dose"  = "Event time 1 $\\times$ dose",
+    "e::2:dose"  = "Event time 2 $\\times$ dose",
+    "e::3:dose"  = "Event time 3 $\\times$ dose",
+    "e::4:dose"  = "Event time 4 $\\times$ dose",
+    "e::5:dose"  = "Event time 5 $\\times$ dose",
+    "e::6:dose"  = "Event time 6 $\\times$ dose",
+    "e::7:dose"  = "Event time 7 $\\times$ dose",
+    "e::8:dose"  = "Event time 8 $\\times$ dose",
+    "e::9:dose"  = "Event time 9 $\\times$ dose",
+    "e::10:dose" = "Event time 10 $\\times$ dose",
+    "log_gdp_pc" = "Log GDP per capita",
+    "trade_frac" = "Trade openness",
+    "gross_fixed_capital_frac" = "Gross fixed capital formation",
+    "gross_savings_frac" = "Gross savings",
+    "working_age_pop" = "Working-age population"
+  ),
+  drop = "Intercept",
+  title = "TWFE event-study with continuous treatment intensity: Top 1\\% income share (post-tax)",
+  label = "tab:twfe_continuous_pretax",
+  notes = c(
+    "The dependent variable is the pre-tax top 1\\% income share.",
+    "The omitted event time is $e=-1$.",
+    "All specifications include country and year fixed effects.",
+    "Standard errors clustered at the country level."
+  )
+)
+
+tab_twfe
+
+#cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
