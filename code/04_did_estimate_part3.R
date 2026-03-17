@@ -270,7 +270,7 @@ tab_twfe
 #cat(tab_twfe, file = file.path(figure_dir, "tab_twfe_continuous_pretax.tex"))
 
 
-## 3.2. Income share post tax------------------------------------------------------
+# 3.2. Income share post tax------------------------------------------------------
 
 #ESTIMATION
 # Interações: i(e, dose, ref=-1) cria dummies de e interagidas com dose, 
