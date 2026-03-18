@@ -25,14 +25,12 @@ library(data.table)
 library(readr)
 library(haven)
 
-
-
 # Set user
 user = "Rayne"
 
 if (user == "Rayne") {
-  data_dir <- "D:/rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
-  data_dir2 <- "D:/rayne/Documents/2026/projeto_taxacao_desigualdade/dados/tax_reforms_AL"
+  data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
+  data_dir2 <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/tax_reforms_AL"
   
   working_dir <- "D:/rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
@@ -83,7 +81,6 @@ lac_countries <- c(
 )
 
 
-
 # 1 - open raw data-------------------------------------------------------------
 reform_countries <- data.table(
   read_dta(
@@ -92,26 +89,91 @@ reform_countries <- data.table(
 setnames(reform_countries, "country", "Country")
 colnames(reform_countries)
 
-# 2 - open income database (World Inequality Database) -------------------------
+reform_countries <- reform_countries[, .(Country, year,TaxRefOverhaul,
+                                         TaxRefAdmReform, TaxRefPITBroad,
+                                         TaxRefPITRate)]
+
+#rename vars 
+setnames(reform_countries,
+         old = c(
+           "TaxRefOverhaul",
+           "TaxRefAdmReform",
+           "TaxRefPITBroad",
+           "TaxRefPITRate"),
+         new = c(
+           "Ref_Overhaul",
+           "Ref_AdmReform",
+           "Ref_PITBroad",
+           "Ref_PITRate"))
+
+table(reform_countries$Ref_Overhaul)
+table(reform_countries$Ref_AdmReform)
+table(reform_countries$Ref_PITBroad)
+table(reform_countries$Ref_PITRate)
+
+
+#pitbroad_pos = 1 → reforma que amplia base do IR (↑ receita)
+#pitbroad_neg = 1 → reforma que reduz base (↓ receita)
+
+# PIT Broadening
+reform_countries[, pitbroad_pos := as.integer(Ref_PITBroad == 1)]
+reform_countries[, pitbroad_neg := as.integer(Ref_PITBroad == -1)]
+
+#pitrate_pos = 1 → aumento de alíquotas
+#pitrate_neg = 1 → redução de alíquotas
+
+# PIT Rate
+reform_countries[, pitrate_pos := as.integer(Ref_PITRate == 1)]
+reform_countries[, pitrate_neg := as.integer(Ref_PITRate == -1)]
+
+table(reform_countries$Ref_Overhaul)
+table(reform_countries$Ref_AdmReform)
+table(reform_countries$Ref_PITBroad)
+table(reform_countries$Ref_PITRate)
+
+table(reform_countries$pitbroad_pos)
+table(reform_countries$pitbroad_neg)
+table(reform_countries$pitrate_pos)
+table(reform_countries$pitrate_neg)
+
+
+# 2 - Income database (World Inequality Database) -----------------------------
+
+#Inequality data it was cleaned and organized by Mariana in another code 
 
 dt_income <- data.table(
   read_csv(
-    file.path(data_dir, "income_share1_WID.csv")))
+    file.path(data_dir, "final_data_inequality_WID.csv")))
 
+colnames(dt_income)
 dt_income <- dt_income[, ("Code") := NULL]
+
+
+dt_income[, year := as.integer(year)]
 
 setorder(dt_income, Country, year)
 
+stopifnot(is.integer(dt_income$year))
 
 unique_countries <- sort(unique(dt_income$Country))
 unique_countries
 
+unique_countries <- sort(unique(reform_countries$Country))
+unique_countries
 
 setdiff(lac_countries, sort(unique(dt_income$Country)))
 
+dt_income[, Country := fcase(
+  Country == "Czech Republic",  "Czechia",
+  Country == "Slovakia",        "Slovak Republic",
+  Country == "Turkey",          "Turkiye",       
+  Country == "USA",             "United States",
+  default = Country
+)]
+
+
 dt_income <- dt_income[, lac := as.numeric(Country%in%lac_countries)]
 dt_income <- dt_income[lac == 1]
-
 
 
 #merge data1
@@ -152,3 +214,4 @@ panel_data_final <- merge(panel_data, dt_controls, by = c("Country", "year"),
 colnames(panel_data_final)
 
 panel_data_final <- panel_data_final[, c("oecd") := NULL]
+
