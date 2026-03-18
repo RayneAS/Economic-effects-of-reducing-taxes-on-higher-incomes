@@ -111,31 +111,58 @@ table(reform_countries$Ref_AdmReform)
 table(reform_countries$Ref_PITBroad)
 table(reform_countries$Ref_PITRate)
 
+#define increase tax reforms
+reform_countries[, tax_increase :=
+                   as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1)
+]
 
-#pitbroad_pos = 1 → reforma que amplia base do IR (↑ receita)
-#pitbroad_neg = 1 → reforma que reduz base (↓ receita)
+#define cut tax reforms
+reform_countries[, tax_cut :=
+                   as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1)
+]
 
-# PIT Broadening
-reform_countries[, pitbroad_pos := as.integer(Ref_PITBroad == 1)]
-reform_countries[, pitbroad_neg := as.integer(Ref_PITBroad == -1)]
+#define structural reforms
+reform_countries[, structural :=
+                   as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1)
+]
 
-#pitrate_pos = 1 → aumento de alíquotas
-#pitrate_neg = 1 → redução de alíquotas
 
-# PIT Rate
-reform_countries[, pitrate_pos := as.integer(Ref_PITRate == 1)]
-reform_countries[, pitrate_neg := as.integer(Ref_PITRate == -1)]
+table(reform_countries$tax_increase)
+table(reform_countries$tax_cut)
+table(reform_countries$structural)
 
-table(reform_countries$Ref_Overhaul)
-table(reform_countries$Ref_AdmReform)
-table(reform_countries$Ref_PITBroad)
-table(reform_countries$Ref_PITRate)
 
-table(reform_countries$pitbroad_pos)
-table(reform_countries$pitbroad_neg)
-table(reform_countries$pitrate_pos)
-table(reform_countries$pitrate_neg)
+#check1
+reform_countries[, overlap_inc_cut := tax_increase + tax_cut]
+table(reform_countries$overlap_inc_cut)
 
+#check2
+colSums(reform_countries[, .(tax_increase, tax_cut, structural)])
+
+## 1.1 Define treatment -------------------------------------------------------------
+
+reform_countries[, g_increase :=
+                   ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
+                 by = Country
+]
+
+reform_countries[, g_cut :=
+                   ifelse(any(tax_cut == 1), min(year[tax_cut == 1]), 0),
+                 by = Country
+]
+
+reform_countries[, g_struct :=
+                   ifelse(any(structural == 1), min(year[structural == 1]), 0),
+                 by = Country
+]
+
+table(reform_countries$g_increase)
+table(reform_countries$g_cut)
+table(reform_countries$g_struct)
+
+reform_countries[g_increase > 0, .N, by = Country]
+reform_countries[g_cut > 0, .N, by = Country]
+reform_countries[g_struct > 0, .N, by = Country]
 
 # 2 - Income database (World Inequality Database) -----------------------------
 
@@ -215,3 +242,8 @@ colnames(panel_data_final)
 
 panel_data_final <- panel_data_final[, c("oecd") := NULL]
 
+
+#save data
+fwrite(panel_data_final,
+       file.path(data_dir, paste0("LA_data_for_model.csv")),
+       sep = ",")
