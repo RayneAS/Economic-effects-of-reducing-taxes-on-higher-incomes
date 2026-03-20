@@ -148,3 +148,208 @@ kbl(
     latex_options = c("hold_position"),
     font_size = 10
   )
+
+
+
+# 3 - Define auxiliary vars to did package ------------------------------------------------------
+##tax_increase is the first reform tested
+
+#obs: A variavel abaixo ja foi definida antes 
+# reform_countries[, g_increase :=
+#                    ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
+#                  by = Country
+# ]
+
+
+setorder(panel, Code, year)
+
+
+# ever-treated indicator (country-level)
+panel[, treated_group := as.integer(any(tax_increase == 1, na.rm = TRUE)), 
+      by = Code]
+
+#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
+panel[treated_group == 1, uniqueN(Country)]
+panel[, .N, by = treated_group]
+panel[treated_group == 1, uniqueN(Code)]
+
+#Define First of treatment (Tax reform)
+panel[, first_treat_year :=
+        if (any(tax_increase == 1, na.rm=TRUE))
+          min(year[tax_increase == 1], na.rm=TRUE)
+      else NA_integer_,
+      by = Code]
+
+
+panel[Country=="Argentina",
+      .(first_treat_year=unique(first_treat_year))]
+
+
+# Define pre-period flag
+panel[, pre_period := 0L]
+panel[treated_group == 1 & !is.na(first_treat_year) & 
+        year < first_treat_year, pre_period := 1L]
+panel[treated_group == 0, pre_period := 1L]
+
+
+# View(panel[,list(Country, year, tax_increase, pre_period,
+#                  treated_group, first_treat_year)])
+
+#Define country numeric id did package
+panel[, id := .GRP, by = Code]
+
+#Define gvar did package
+panel[, g_increase := first_treat_year]
+panel[is.na(g_increase), g_increase := 0]
+
+
+# garantir que gvar seja double
+panel[, g_increase := as.numeric(g_increase)]
+
+# checagens
+str(panel$g_increase)
+panel[, .(
+  n_na_gvar = sum(is.na(g_increase)),
+  n_inf_gvar = sum(is.infinite(g_increase)),
+  min_gvar = min(g_increase, na.rm = TRUE),
+  max_gvar = max(g_increase, na.rm = TRUE)
+)]
+sort(unique(panel$g_increase))
+
+
+# View(panel[,list(Country, year, id, tax_increase,
+#                  treated_group,first_treat_year, g_increase)])
+
+#data checks
+panel[, .(
+  n_units = uniqueN(id),
+  n_treated = uniqueN(id[g_increase > 0]),
+  n_never = uniqueN(id[g_increase == 0])
+)]
+
+# test <- panel[treated_group==1]
+# unique_countri <- unique(test$Country)
+# unique_countri
+
+panel[, uniqueN(g_increase)]
+unique_g_var <- sort(unique(panel$g_increase))
+unique_g_var
+
+#check g_var
+check_gvar <- panel[g_increase > 0,
+                    .(
+                      gvar_unique = unique(g_increase),
+                      min_year_treated = min(year[tax_increase == 1], na.rm = TRUE)
+                    ),
+                    by = .(Code, Country)
+]
+
+check_gvar[gvar_unique != min_year_treated]
+
+# 4 - Baseline (pre-treatment) summary stats at COUNTRY level------------------------------------------
+
+vars_baseline <- c(
+  # outcome
+  "pt_share_top1",
+  "d_share_top1",
+  "gini_pre_tax",
+  "gini_post_tax",
+  
+  # controls
+  "log_gdp_pc",
+  "trade_frac",
+  "tax_revenue_frac",
+  "gross_fixed_capital_frac",
+  "working_age_pop"
+)
+
+#define labels
+var_labels <- c(
+  pt_share_top1           = "Top 1% income share (pre-tax)",
+  d_share_top1            = "Top 1% income share (post-tax)",
+  gini_pre_tax            = "Gini coefficient (pre-tax income)",
+  gini_post_tax           = "Gini coefficient (post-tax income)",
+  Reform.Dummy            = "Tax reform indicator",
+  log_gdp_pc              = "Log GDP per capita",
+  trade_frac              = "Trade openness",
+  tax_revenue_frac        = "Tax revenue",
+  gross_fixed_capital_frac= "Gross fixed capital formation",
+  working_age_pop         = "Working-age population"
+)
+
+missing_vars <- setdiff(vars_baseline, names(panel))
+if (length(missing_vars) > 0) {
+  stop("Variáveis ausentes em vars_baseline: ", paste(missing_vars, collapse = ", "))
+}
+
+
+#ever-treated: years < g_increase
+#never-treated: in all years in the sample
+panel_pre <- panel[(g_increase == 0L) | (year < g_increase)]
+
+
+yr_min <- panel_pre[treated_group == 1, min(year, na.rm = TRUE)]
+yr_max <- panel_pre[treated_group == 1, max(year, na.rm = TRUE)]
+panel_pre <- panel_pre[year >= yr_min & year <= yr_max]
+
+#mean by country - for selected vars
+country_pre <- panel_pre[, lapply(.SD, function(x) {
+  x2 <- x[is.finite(x)]
+  if (length(x2) == 0) NA_real_ else mean(x2)
+}), by = .(Code, Country, treated_group), .SDcols = vars_baseline]
+
+
+# function test of mean difference between countries
+diff_pval <- function(x_treat, x_ctrl) {
+  # remove NA
+  xt <- x_treat[is.finite(x_treat)]
+  xc <- x_ctrl[is.finite(x_ctrl)]
+  if (length(xt) < 2 || length(xc) < 2) return(NA_real_)
+  tryCatch(t.test(xt, xc)$p.value, error = function(e) NA_real_)
+}
+
+
+#table: treated vs never treated + diff + p-val
+baseline_table <- rbindlist(lapply(vars_baseline, function(v){
+  x_treat <- country_pre[treated_group == 1, get(v)]
+  x_ctrl  <- country_pre[treated_group == 0, get(v)]
+  
+  mean_treat <- mean(x_treat, na.rm = TRUE)
+  mean_ctrl  <- mean(x_ctrl,  na.rm = TRUE)
+  
+  data.table(
+    Variable     = v,
+    N_Treated    = sum(is.finite(x_treat)),
+    N_Never      = sum(is.finite(x_ctrl)),
+    Treated      = mean_treat,
+    Never        = mean_ctrl,
+    Diff         = mean_treat - mean_ctrl,
+    P_value      = diff_pval(x_treat, x_ctrl)
+  )
+}), fill = TRUE)
+
+
+#labels
+baseline_table[, Variable := fifelse(Variable %chin% names(var_labels),
+                                     var_labels[Variable], Variable)]
+
+
+#round
+baseline_table[, `:=`(
+  Treated = round(Treated, 3),
+  Never   = round(Never, 3),
+  Diff    = round(Diff, 3),
+  P_value = round(P_value, 3)
+)]
+
+
+#LaTeX table
+kbl(
+  baseline_table[, .(Variable, N_Treated, N_Never, Treated, Never, Diff, P_value)],
+  format = "latex",
+  booktabs = TRUE,
+  align = "lrrrrrrr",
+  caption = "Pre-treatment country-level summary statistics: Ever-treated vs Never-treated"
+) %>%
+  kable_styling(latex_options = "hold_position", font_size = 10)
+
