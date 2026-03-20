@@ -5,8 +5,11 @@ gc()
 packages <- c(
   "data.table",
   "readr",
-  "haven"
+  "haven",
+  "knitr",
+  "kableExtra"
 )
+
 
 installed <- rownames(installed.packages())
 to_install <- setdiff(packages, installed)
@@ -21,6 +24,9 @@ invisible(lapply(packages, library, character.only = TRUE))
 library(data.table)
 library(readr)
 library(haven)
+library(knitr)
+library(kableExtra)
+
 
 # Set user
 user = "Rayne"
@@ -37,11 +43,40 @@ code_dir <- file.path(working_dir, "code")
 
 
 # 1 - open data-------------------------------------------------------------
-dt <- data.table(
+panel <- data.table(
   read_csv(
     file.path(data_dir, "LA_data_for_model.csv")))
 
-colnames(dt)
+colnames(panel)
+
+unico_country <- unique(panel$Country)
+unico_country
+
+# Log transformations
+panel[, log_gdp_pc := log(gdp_pc)]
+panel[, log_patent := log(1 + patent)]
+panel[, log_pt_share_top1 := log(pt_share_top1)]
+panel[, log_d_share_top1 := log(d_share_top1)]
+
+
+# Variables originally in percent or % of GDP
+pct_vars <- c(
+  "trade",
+  "tax_revenue",
+  "gross_savings",
+  "gross_fixed_capital",
+  "bank_deposits_to_gdp",
+  "stocks_capt",
+  "stocks_trade",
+  "trade_union",
+  "gov_gross_debt"
+)
+
+for (v in pct_vars) {
+  panel[, paste0(v, "_frac") := get(v) / 100]
+}
+
+panel[, working_age_pop := working_age_pop / 100]
 
 
 # 2 - Descriptive Analysis total sample  --------------------------------------------
@@ -90,7 +125,7 @@ var_labels <- c(
   pt_share_top1           = "Top 1% income share (pre-tax)",
   d_share_top1            = "Top 1% income share (post-tax)",
   gini_pre_tax            = "Gini coefficient (pre-tax income)",
-  gini_post_tax           = "Gini coefficient (pos-tax income)",
+  gini_post_tax           = "Gini coefficient (post-tax income)",
   Reform.Dummy            = "Tax reform indicator",
   log_gdp_pc              = "Log GDP per capita",
   trade_frac              = "Trade openness",
@@ -113,14 +148,3 @@ kbl(
     latex_options = c("hold_position"),
     font_size = 10
   )
-
-#clean
-rm(dup_key,
-   flag_range,
-   growth_check,
-   miss_by_country,
-   miss_by_year,
-   qc,
-   qc_list,
-   qc_overview,
-   within_sd)
