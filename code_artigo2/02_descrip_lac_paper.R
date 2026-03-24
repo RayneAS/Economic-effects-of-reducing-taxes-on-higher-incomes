@@ -360,8 +360,6 @@ kbl(
 
 # 5- measure of inequality: pt_share_top1-------------------------------
 
-panel <- panel[year >= 1980]
-
 
 #Unconditional----------------------------
 
@@ -380,7 +378,7 @@ att_gt_obj <- att_gt(
 
 es <- aggte(att_gt_obj, type = "dynamic",
             min_e = -5,
-            max_e = 10)
+            max_e = 5)
 
 summary(es)
 
@@ -410,7 +408,7 @@ att_gt_obj <- att_gt(
 
 es <- aggte(att_gt_obj, type = "dynamic",
             min_e = -5,
-            max_e = 10)
+            max_e = 5)
 
 summary(es)
 
@@ -444,7 +442,7 @@ att_gt_cond <- att_gt(
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 5)
 summary(es_cond)
 
 p_cond <- ggdid(es_cond) +
@@ -476,7 +474,7 @@ att_gt_cond <- att_gt(
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 5)
 summary(es_cond)
 
 p_cond <- ggdid(es_cond) +

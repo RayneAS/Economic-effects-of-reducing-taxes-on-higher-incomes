@@ -137,13 +137,13 @@ dt_income <- dt_income[lac == 1]
 range(dt_income$year)
 range(reform_countries$year)
 
+dt_income <- dt_income[year >= 1990 & year <= 2004]
+
 
 #merge data1
 panel_data <- merge(dt_income, reform_countries, by = c("Country", "year"), 
                     all.x = TRUE)
 
-panel_data[is.na(tax_increase), unique(Country)]
-panel_data[is.na(tax_increase), .N, by = Country]
 
 
 setorder(panel_data, Country, year)
@@ -170,6 +170,8 @@ dt_controls[, Country := fcase(
 )]
 
 setdiff(lac_countries, sort(unique(dt_controls$Country)))
+
+dt_controls <- dt_controls[year >= 1990 & year <= 2004]
 
 
 #merge
@@ -199,23 +201,28 @@ table(panel_data_final$Ref_PITRate, useNA = "ifany")
 
 #define increase tax reforms
 panel_data_final[, tax_increase :=
-                   as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1)
+                   fifelse(!is.na(Ref_PITRate) | !is.na(Ref_PITBroad),
+                           as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1),
+                           NA_integer_)
 ]
 
 #define cut tax reforms
 panel_data_final[, tax_cut :=
-                   as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1)
+                   fifelse(!is.na(Ref_PITRate) | !is.na(Ref_PITBroad),
+                           as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1),
+                           NA_integer_)
 ]
 
 #define structural reforms
 panel_data_final[, structural :=
-                   as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1)
+                   fifelse(!is.na(Ref_Overhaul) | !is.na(Ref_AdmReform),
+                           as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1),
+                           NA_integer_)
 ]
 
-
-table(panel_data_final$tax_increase)
-table(panel_data_final$tax_cut)
-table(panel_data_final$structural)
+table(panel_data_final$tax_increase, useNA = "ifany")
+table(panel_data_final$tax_cut, useNA = "ifany")
+table(panel_data_final$structural, useNA = "ifany")
 
 
 #check1
@@ -223,23 +230,22 @@ panel_data_final[, overlap_inc_cut := tax_increase + tax_cut]
 table(panel_data_final$overlap_inc_cut)
 
 #check2
-colSums(panel_data_final[, .(tax_increase, tax_cut, structural)])
-
+colSums(panel_data_final[, .(tax_increase, tax_cut, structural)], na.rm = TRUE)
 
 
 
 panel_data_final[, g_increase :=
-                   ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
+                   ifelse(any(tax_increase == 1, na.rm = TRUE), min(year[tax_increase == 1]), 0),
                  by = Country
 ]
 
 panel_data_final[, g_cut :=
-                   ifelse(any(tax_cut == 1), min(year[tax_cut == 1]), 0),
+                   ifelse(any(tax_cut == 1, na.rm = TRUE), min(year[tax_cut == 1]), 0),
                  by = Country
 ]
 
 panel_data_final[, g_struct :=
-                   ifelse(any(structural == 1), min(year[structural == 1]), 0),
+                   ifelse(any(structural == 1, na.rm = TRUE), min(year[structural == 1]), 0),
                  by = Country
 ]
 
@@ -255,7 +261,6 @@ panel_data_final[g_struct > 0, .N, by = Country]
 panel_data_final <- panel_data_final[, c("oecd") := NULL]
 
 
-panel_data_final <- panel_data_final[year >= 1980]
 
 #save data
 fwrite(panel_data_final,
