@@ -82,6 +82,7 @@ lac_countries <- c(
 
 
 # 1 - open raw data-------------------------------------------------------------
+
 reform_countries <- data.table(
   read_dta(
     file.path(data_dir2, "fsh-taxreformslac-v02-2014-stata13.dta")))
@@ -93,76 +94,6 @@ reform_countries <- reform_countries[, .(Country, year,TaxRefOverhaul,
                                          TaxRefAdmReform, TaxRefPITBroad,
                                          TaxRefPITRate)]
 
-#rename vars 
-setnames(reform_countries,
-         old = c(
-           "TaxRefOverhaul",
-           "TaxRefAdmReform",
-           "TaxRefPITBroad",
-           "TaxRefPITRate"),
-         new = c(
-           "Ref_Overhaul",
-           "Ref_AdmReform",
-           "Ref_PITBroad",
-           "Ref_PITRate"))
-
-table(reform_countries$Ref_Overhaul)
-table(reform_countries$Ref_AdmReform)
-table(reform_countries$Ref_PITBroad)
-table(reform_countries$Ref_PITRate)
-
-#define increase tax reforms
-reform_countries[, tax_increase :=
-                   as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1)
-]
-
-#define cut tax reforms
-reform_countries[, tax_cut :=
-                   as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1)
-]
-
-#define structural reforms
-reform_countries[, structural :=
-                   as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1)
-]
-
-
-table(reform_countries$tax_increase)
-table(reform_countries$tax_cut)
-table(reform_countries$structural)
-
-
-#check1
-reform_countries[, overlap_inc_cut := tax_increase + tax_cut]
-table(reform_countries$overlap_inc_cut)
-
-#check2
-colSums(reform_countries[, .(tax_increase, tax_cut, structural)])
-
-## 1.1 Define treatment -------------------------------------------------------------
-
-reform_countries[, g_increase :=
-                   ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
-                 by = Country
-]
-
-reform_countries[, g_cut :=
-                   ifelse(any(tax_cut == 1), min(year[tax_cut == 1]), 0),
-                 by = Country
-]
-
-reform_countries[, g_struct :=
-                   ifelse(any(structural == 1), min(year[structural == 1]), 0),
-                 by = Country
-]
-
-table(reform_countries$g_increase)
-table(reform_countries$g_cut)
-table(reform_countries$g_struct)
-
-reform_countries[g_increase > 0, .N, by = Country]
-reform_countries[g_cut > 0, .N, by = Country]
-reform_countries[g_struct > 0, .N, by = Country]
 
 # 2 - Income database (World Inequality Database) -----------------------------
 
@@ -203,9 +134,16 @@ dt_income <- dt_income[, lac := as.numeric(Country%in%lac_countries)]
 dt_income <- dt_income[lac == 1]
 
 
+range(dt_income$year)
+range(reform_countries$year)
+
+
 #merge data1
 panel_data <- merge(dt_income, reform_countries, by = c("Country", "year"), 
                     all.x = TRUE)
+
+panel_data[is.na(tax_increase), unique(Country)]
+panel_data[is.na(tax_increase), .N, by = Country]
 
 
 setorder(panel_data, Country, year)
@@ -238,10 +176,86 @@ setdiff(lac_countries, sort(unique(dt_controls$Country)))
 panel_data_final <- merge(panel_data, dt_controls, by = c("Country", "year"), 
                     all.x = TRUE)
 
-colnames(panel_data_final)
+
+## 4- Define treatment -------------------------------------------------------------
+#rename vars 
+setnames(panel_data_final,
+         old = c(
+           "TaxRefOverhaul",
+           "TaxRefAdmReform",
+           "TaxRefPITBroad",
+           "TaxRefPITRate"),
+         new = c(
+           "Ref_Overhaul",
+           "Ref_AdmReform",
+           "Ref_PITBroad",
+           "Ref_PITRate"))
+
+table(panel_data_final$Ref_Overhaul, useNA = "ifany")
+table(panel_data_final$Ref_AdmReform, useNA = "ifany")
+table(panel_data_final$Ref_PITBroad, useNA = "ifany")
+table(panel_data_final$Ref_PITRate, useNA = "ifany")
+
+
+#define increase tax reforms
+panel_data_final[, tax_increase :=
+                   as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1)
+]
+
+#define cut tax reforms
+panel_data_final[, tax_cut :=
+                   as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1)
+]
+
+#define structural reforms
+panel_data_final[, structural :=
+                   as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1)
+]
+
+
+table(panel_data_final$tax_increase)
+table(panel_data_final$tax_cut)
+table(panel_data_final$structural)
+
+
+#check1
+panel_data_final[, overlap_inc_cut := tax_increase + tax_cut]
+table(panel_data_final$overlap_inc_cut)
+
+#check2
+colSums(panel_data_final[, .(tax_increase, tax_cut, structural)])
+
+
+
+
+panel_data_final[, g_increase :=
+                   ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
+                 by = Country
+]
+
+panel_data_final[, g_cut :=
+                   ifelse(any(tax_cut == 1), min(year[tax_cut == 1]), 0),
+                 by = Country
+]
+
+panel_data_final[, g_struct :=
+                   ifelse(any(structural == 1), min(year[structural == 1]), 0),
+                 by = Country
+]
+
+table(panel_data_final$g_increase)
+table(panel_data_final$g_cut)
+table(panel_data_final$g_struct)
+
+panel_data_final[g_increase > 0, .N, by = Country]
+panel_data_final[g_cut > 0, .N, by = Country]
+panel_data_final[g_struct > 0, .N, by = Country]
+
 
 panel_data_final <- panel_data_final[, c("oecd") := NULL]
 
+
+panel_data_final <- panel_data_final[year >= 1980]
 
 #save data
 fwrite(panel_data_final,
