@@ -7,7 +7,9 @@ packages <- c(
   "readr",
   "haven",
   "knitr",
-  "kableExtra"
+  "kableExtra",
+  "did",
+  "ggplot2"
 )
 
 
@@ -26,7 +28,8 @@ library(readr)
 library(haven)
 library(knitr)
 library(kableExtra)
-
+library(did)
+library(ggplot2)
 
 # Set user
 user = "Rayne"
@@ -35,10 +38,11 @@ if (user == "Rayne") {
   data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
   data_dir2 <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/tax_reforms_AL"
   
-  working_dir <- "D:/rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
+  working_dir <- "C:/Users/Rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
 
 code_dir <- file.path(working_dir, "code")
+figure_dir <- file.path(working_dir, "output_artigo2")
 
 
 
@@ -353,3 +357,134 @@ kbl(
 ) %>%
   kable_styling(latex_options = "hold_position", font_size = 10)
 
+
+# 5- measure of inequality: pt_share_top1-------------------------------
+
+panel <- panel[year >= 1980]
+
+
+#Unconditional----------------------------
+
+
+#Event Studies
+# main: notyettreated
+att_gt_obj <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "g_increase",
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_LA.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_obj <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "g_increase",
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated"
+)
+
+es <- aggte(att_gt_obj, type = "dynamic",
+            min_e = -5,
+            max_e = 10)
+
+summary(es)
+
+ggdid(es)
+
+p_es <- ggdid(es) +
+  labs(title = NULL)
+
+ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_LA.jpg"), 
+       plot = p_es,
+       height= 4, width = 6)
+
+
+
+#Conditional ----------------------------------
+
+#Event Studies
+# main: notyettreated
+
+att_gt_cond <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "g_increase",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac ,
+  data = panel,
+  panel = TRUE,
+  control_group = "notyettreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_cond_LA.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
+
+
+
+#Event Studies
+# robustness: nevertreated
+
+att_gt_cond <- att_gt(
+  yname = "pt_share_top1",
+  tname = "year",
+  idname = "id",
+  gname = "g_increase",
+  xformla = ~ log_gdp_pc + trade_frac +
+    gross_fixed_capital_frac ,
+  data = panel,
+  panel = TRUE,
+  control_group = "nevertreated",
+  est_method = "reg",
+  faster_mode = FALSE
+)
+
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 10)
+summary(es_cond)
+
+p_cond <- ggdid(es_cond) +
+  labs(title = NULL)
+
+p_cond
+
+
+ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond_LA.jpg"), 
+       plot = p_cond,
+       height= 4, width = 6)
