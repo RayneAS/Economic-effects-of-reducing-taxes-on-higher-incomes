@@ -121,14 +121,6 @@ unique_countries
 
 setdiff(lac_countries, sort(unique(dt_income$Country)))
 
-dt_income[, Country := fcase(
-  Country == "Czech Republic",  "Czechia",
-  Country == "Slovakia",        "Slovak Republic",
-  Country == "Turkey",          "Turkiye",       
-  Country == "USA",             "United States",
-  default = Country
-)]
-
 
 dt_income <- dt_income[, lac := as.numeric(Country%in%lac_countries)]
 dt_income <- dt_income[lac == 1]
@@ -144,7 +136,17 @@ dt_income <- dt_income[year >= 1990 & year <= 2004]
 panel_data <- merge(dt_income, reform_countries, by = c("Country", "year"), 
                     all.x = TRUE)
 
+#obs:
+# Missing values in reform variables are recoded as 0.
+# This assumes that country-years without a recorded reform in the source data
+# correspond to no reform occurrence, rather than missing information.
 
+vars <- c("TaxRefOverhaul", "TaxRefAdmReform", 
+          "TaxRefPITBroad", "TaxRefPITRate")
+
+
+panel_data[, (vars) := lapply(.SD, function(x) fifelse(is.na(x), 0, x)), 
+           .SDcols = vars]
 
 setorder(panel_data, Country, year)
 
@@ -200,25 +202,14 @@ table(panel_data_final$Ref_PITRate, useNA = "ifany")
 
 
 #define increase tax reforms
-panel_data_final[, tax_increase :=
-                   fifelse(!is.na(Ref_PITRate) | !is.na(Ref_PITBroad),
-                           as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1),
-                           NA_integer_)
-]
+panel_data_final[, tax_increase := as.integer(Ref_PITRate == 1 | Ref_PITBroad == 1)]
 
 #define cut tax reforms
-panel_data_final[, tax_cut :=
-                   fifelse(!is.na(Ref_PITRate) | !is.na(Ref_PITBroad),
-                           as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1),
-                           NA_integer_)
-]
+panel_data_final[, tax_cut:= as.integer(Ref_PITRate == -1 | Ref_PITBroad == -1)]
+
 
 #define structural reforms
-panel_data_final[, structural :=
-                   fifelse(!is.na(Ref_Overhaul) | !is.na(Ref_AdmReform),
-                           as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1),
-                           NA_integer_)
-]
+panel_data_final[, structural:= as.integer(Ref_Overhaul == 2 | Ref_AdmReform == 1)]
 
 table(panel_data_final$tax_increase, useNA = "ifany")
 table(panel_data_final$tax_cut, useNA = "ifany")
@@ -230,7 +221,8 @@ panel_data_final[, overlap_inc_cut := tax_increase + tax_cut]
 table(panel_data_final$overlap_inc_cut)
 
 #check2
-colSums(panel_data_final[, .(tax_increase, tax_cut, structural)], na.rm = TRUE)
+colSums(panel_data_final[, .(tax_increase, tax_cut, structural,
+                             overlap_inc_cut)], na.rm = TRUE)
 
 
 
@@ -249,20 +241,54 @@ panel_data_final[, g_struct :=
                  by = Country
 ]
 
+panel_data_final[, g_overlap :=
+                   ifelse(any(overlap_inc_cut == 1, na.rm = TRUE), min(year[overlap_inc_cut == 1]), 0),
+                 by = Country
+]
+
 table(panel_data_final$g_increase)
 table(panel_data_final$g_cut)
 table(panel_data_final$g_struct)
+table(panel_data_final$g_overlap)
+
 
 panel_data_final[g_increase > 0, .N, by = Country]
 panel_data_final[g_cut > 0, .N, by = Country]
 panel_data_final[g_struct > 0, .N, by = Country]
 
 
-panel_data_final <- panel_data_final[, c("oecd") := NULL]
+panel_data_final[, oecd := NULL]
+
+## 5- Final adjustments -------------------------------------------------------------
+
+# Log transformations
+panel_data_final[, log_gdp_pc := log(gdp_pc)]
+panel_data_final[, log_patent := log(1 + patent)]
+panel_data_final[, log_pt_share_top1 := log(pt_share_top1)]
+panel_data_final[, log_d_share_top1 := log(d_share_top1)]
 
 
+# Variables originally in percent or % of GDP
+pct_vars <- c(
+  "trade",
+  "tax_revenue",
+  "gross_savings",
+  "gross_fixed_capital",
+  "bank_deposits_to_gdp",
+  "stocks_capt",
+  "stocks_trade",
+  "trade_union",
+  "gov_gross_debt"
+)
 
-#save data
+for (v in pct_vars) {
+  panel_data_final[, paste0(v, "_frac") := get(v) / 100]
+}
+
+panel_data_final[, working_age_pop := working_age_pop / 100]
+
+## 6- save data -------------------------------------------------------------
+
 fwrite(panel_data_final,
        file.path(data_dir, paste0("LA_data_for_model.csv")),
        sep = ",")
