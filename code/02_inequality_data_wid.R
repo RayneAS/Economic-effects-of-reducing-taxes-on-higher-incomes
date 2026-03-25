@@ -13,7 +13,7 @@ library(wid)
 
 
 
-setwd("~/tributação - Fabiana")
+setwd("~/")
 
 ## Income pre tax and transfers
 data_incshare_pretax <- download_wid(
