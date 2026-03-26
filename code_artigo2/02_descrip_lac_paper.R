@@ -9,7 +9,8 @@ packages <- c(
   "knitr",
   "kableExtra",
   "did",
-  "ggplot2"
+  "ggplot2", 
+  "fixest"
 )
 
 
@@ -30,6 +31,7 @@ library(knitr)
 library(kableExtra)
 library(did)
 library(ggplot2)
+library(fixest)
 
 # Set user
 user = "Rayne"
@@ -56,32 +58,6 @@ colnames(panel)
 unico_country <- unique(panel$Country)
 unico_country
 
-# Log transformations
-panel[, log_gdp_pc := log(gdp_pc)]
-panel[, log_patent := log(1 + patent)]
-panel[, log_pt_share_top1 := log(pt_share_top1)]
-panel[, log_d_share_top1 := log(d_share_top1)]
-
-
-# Variables originally in percent or % of GDP
-pct_vars <- c(
-  "trade",
-  "tax_revenue",
-  "gross_savings",
-  "gross_fixed_capital",
-  "bank_deposits_to_gdp",
-  "stocks_capt",
-  "stocks_trade",
-  "trade_union",
-  "gov_gross_debt"
-)
-
-for (v in pct_vars) {
-  panel[, paste0(v, "_frac") := get(v) / 100]
-}
-
-panel[, working_age_pop := working_age_pop / 100]
-
 
 # 2 - Descriptive Analysis total sample  --------------------------------------------
 
@@ -97,8 +73,7 @@ vars_desc <- c(
   "log_gdp_pc",
   "trade_frac",
   "tax_revenue_frac",
-  "gross_fixed_capital_frac",
-  "working_age_pop"
+  "gross_fixed_capital_frac"
 )
 
 #define function
@@ -130,12 +105,10 @@ var_labels <- c(
   d_share_top1            = "Top 1% income share (post-tax)",
   gini_pre_tax            = "Gini coefficient (pre-tax income)",
   gini_post_tax           = "Gini coefficient (post-tax income)",
-  Reform.Dummy            = "Tax reform indicator",
   log_gdp_pc              = "Log GDP per capita",
   trade_frac              = "Trade openness",
   tax_revenue_frac        = "Tax revenue",
-  gross_fixed_capital_frac= "Gross fixed capital formation",
-  working_age_pop         = "Working-age population"
+  gross_fixed_capital_frac= "Gross fixed capital formation"
 )
 
 desc_table[, Variable := var_labels[Variable]]
@@ -154,40 +127,34 @@ kbl(
   )
 
 
-
 # 3 - Define auxiliary vars to did package ------------------------------------------------------
 ##tax_increase is the first reform tested
 
-#obs: A variavel abaixo ja foi definida antes 
-# reform_countries[, g_increase :=
-#                    ifelse(any(tax_increase == 1), min(year[tax_increase == 1]), 0),
-#                  by = Country
-# ]
-
-
 setorder(panel, Code, year)
 
+#the treatment is tax_increase
 
-# ever-treated indicator (country-level)
-panel[, treated_group := as.integer(any(tax_increase == 1, na.rm = TRUE)), 
+#ever-treated: any tax reform (increase)
+panel[, treated_group := as.integer(any(structural > 0, na.rm = TRUE)), 
       by = Code]
 
-#View(panel[,list(Country, year, Reform.Dummy, treated_group)])
 panel[treated_group == 1, uniqueN(Country)]
 panel[, .N, by = treated_group]
 panel[treated_group == 1, uniqueN(Code)]
 
-#Define First of treatment (Tax reform)
-panel[, first_treat_year :=
-        if (any(tax_increase == 1, na.rm=TRUE))
-          min(year[tax_increase == 1], na.rm=TRUE)
-      else NA_integer_,
+
+# first year of any tax reform
+panel[, first_treat_year := 
+        if (any(structural > 0, na.rm = TRUE)) {
+          min(year[structural > 0], na.rm = TRUE)
+        } else {
+          NA_integer_
+        },
       by = Code]
 
 
 panel[Country=="Argentina",
       .(first_treat_year=unique(first_treat_year))]
-
 
 # Define pre-period flag
 panel[, pre_period := 0L]
@@ -196,59 +163,56 @@ panel[treated_group == 1 & !is.na(first_treat_year) &
 panel[treated_group == 0, pre_period := 1L]
 
 
-# View(panel[,list(Country, year, tax_increase, pre_period,
-#                  treated_group, first_treat_year)])
+# View(panel[,list(Country, year, tax_increase ,tax_cut,overlap_inc_cut, 
+#                  pre_period, treated_group, first_treat_year)])
 
 #Define country numeric id did package
 panel[, id := .GRP, by = Code]
 
 #Define gvar did package
-panel[, g_increase := first_treat_year]
-panel[is.na(g_increase), g_increase := 0]
+panel[, g_var := first_treat_year]
+panel[is.na(g_var), g_var := 0]
 
-
-# garantir que gvar seja double
-panel[, g_increase := as.numeric(g_increase)]
 
 # checagens
-str(panel$g_increase)
+str(panel$g_var)
 panel[, .(
-  n_na_gvar = sum(is.na(g_increase)),
-  n_inf_gvar = sum(is.infinite(g_increase)),
-  min_gvar = min(g_increase, na.rm = TRUE),
-  max_gvar = max(g_increase, na.rm = TRUE)
+  n_na_gvar = sum(is.na(g_var)),
+  n_inf_gvar = sum(is.infinite(g_var)),
+  min_gvar = min(g_var, na.rm = TRUE),
+  max_gvar = max(g_var, na.rm = TRUE)
 )]
-sort(unique(panel$g_increase))
-
-
-# View(panel[,list(Country, year, id, tax_increase,
-#                  treated_group,first_treat_year, g_increase)])
+sort(unique(panel$g_var))
 
 #data checks
 panel[, .(
   n_units = uniqueN(id),
-  n_treated = uniqueN(id[g_increase > 0]),
-  n_never = uniqueN(id[g_increase == 0])
+  n_treated = uniqueN(id[g_var > 0]),
+  n_never = uniqueN(id[g_var == 0])
 )]
 
 # test <- panel[treated_group==1]
 # unique_countri <- unique(test$Country)
 # unique_countri
 
-panel[, uniqueN(g_increase)]
-unique_g_var <- sort(unique(panel$g_increase))
+panel[, uniqueN(g_var)]
+unique_g_var <- sort(unique(panel$g_var))
 unique_g_var
 
 #check g_var
-check_gvar <- panel[g_increase > 0,
+check_gvar <- panel[g_var > 0,
                     .(
-                      gvar_unique = unique(g_increase),
-                      min_year_treated = min(year[tax_increase == 1], na.rm = TRUE)
+                      gvar_unique = unique(g_var),
+                      min_year_treated = min(year[structural == 1], 
+                                             na.rm = TRUE)
                     ),
                     by = .(Code, Country)
 ]
 
 check_gvar[gvar_unique != min_year_treated]
+
+panel[, .N, by = .(Code, year)][N > 1]
+panel[, .N, by = Code][order(N)]
 
 # 4 - Baseline (pre-treatment) summary stats at COUNTRY level------------------------------------------
 
@@ -263,8 +227,7 @@ vars_baseline <- c(
   "log_gdp_pc",
   "trade_frac",
   "tax_revenue_frac",
-  "gross_fixed_capital_frac",
-  "working_age_pop"
+  "gross_fixed_capital_frac"
 )
 
 #define labels
@@ -273,12 +236,10 @@ var_labels <- c(
   d_share_top1            = "Top 1% income share (post-tax)",
   gini_pre_tax            = "Gini coefficient (pre-tax income)",
   gini_post_tax           = "Gini coefficient (post-tax income)",
-  Reform.Dummy            = "Tax reform indicator",
   log_gdp_pc              = "Log GDP per capita",
   trade_frac              = "Trade openness",
   tax_revenue_frac        = "Tax revenue",
-  gross_fixed_capital_frac= "Gross fixed capital formation",
-  working_age_pop         = "Working-age population"
+  gross_fixed_capital_frac= "Gross fixed capital formation"
 )
 
 missing_vars <- setdiff(vars_baseline, names(panel))
@@ -287,9 +248,9 @@ if (length(missing_vars) > 0) {
 }
 
 
-#ever-treated: years < g_increase
+#ever-treated: years < g_var
 #never-treated: in all years in the sample
-panel_pre <- panel[(g_increase == 0L) | (year < g_increase)]
+panel_pre <- panel[(g_var == 0L) | (year < g_var)]
 
 
 yr_min <- panel_pre[treated_group == 1, min(year, na.rm = TRUE)]
@@ -361,6 +322,12 @@ kbl(
 # 5- measure of inequality: pt_share_top1-------------------------------
 
 
+#Checks
+
+panel[g_var > 0, .(n_countries = uniqueN(Code)), by = g_var][order(g_var)]
+
+panel[, .(first_obs = min(year), g = unique(g_var)), by = .(Code, Country)][order(g)]
+
 #Unconditional----------------------------
 
 
@@ -370,14 +337,14 @@ att_gt_obj <- att_gt(
   yname = "pt_share_top1",
   tname = "year",
   idname = "id",
-  gname = "g_increase",
+  gname = "g_var",
   data = panel,
   panel = TRUE,
   control_group = "notyettreated"
 )
 
 es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
+            min_e = -3,
             max_e = 5)
 
 summary(es)
@@ -400,14 +367,14 @@ att_gt_obj <- att_gt(
   yname = "pt_share_top1",
   tname = "year",
   idname = "id",
-  gname = "g_increase",
+  gname = "g_var",
   data = panel,
   panel = TRUE,
   control_group = "nevertreated"
 )
 
 es <- aggte(att_gt_obj, type = "dynamic",
-            min_e = -5,
+            min_e = -3,
             max_e = 5)
 
 summary(es)
@@ -432,8 +399,8 @@ att_gt_cond <- att_gt(
   yname = "pt_share_top1",
   tname = "year",
   idname = "id",
-  gname = "g_increase",
-  xformla = ~ log_gdp_pc + trade_frac +
+  gname = "g_var",
+  xformla = ~ log_gdp_pc + trade_frac + 
     gross_fixed_capital_frac ,
   data = panel,
   panel = TRUE,
@@ -442,7 +409,7 @@ att_gt_cond <- att_gt(
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 5)
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
 summary(es_cond)
 
 p_cond <- ggdid(es_cond) +
@@ -464,7 +431,7 @@ att_gt_cond <- att_gt(
   yname = "pt_share_top1",
   tname = "year",
   idname = "id",
-  gname = "g_increase",
+  gname = "g_var",
   xformla = ~ log_gdp_pc + trade_frac +
     gross_fixed_capital_frac ,
   data = panel,
@@ -474,7 +441,7 @@ att_gt_cond <- att_gt(
   faster_mode = FALSE
 )
 
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -5, max_e = 5)
+es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
 summary(es_cond)
 
 p_cond <- ggdid(es_cond) +
@@ -486,3 +453,40 @@ p_cond
 ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond_LA.jpg"), 
        plot = p_cond,
        height= 4, width = 6)
+
+
+##TWFE------------------------------------------------------------------
+
+# post-treatment indicator
+panel[, post := 0L]
+panel[treated_group == 1 & year >= first_treat_year, post := 1L]
+
+# DID interaction
+panel[, did := treated_group * post]
+
+# checagens
+table(panel$post, useNA = "ifany")
+table(panel$did, useNA = "ifany")
+
+panel[, .(
+  first_treat_year = unique(first_treat_year),
+  treated_group = unique(treated_group),
+  min_post = min(post),
+  max_post = max(post)
+), by = Code][order(first_treat_year)]
+
+twfe_1 <- feols(
+  pt_share_top1 ~ did | Code + year,
+  data = panel,
+  cluster = ~Code
+)
+
+summary(twfe_1)
+
+twfe_2 <- feols(
+  pt_share_top1 ~ did + log_gdp_pc | Code + year,
+  data = panel,
+  cluster = ~Code
+)
+
+summary(twfe_2)
