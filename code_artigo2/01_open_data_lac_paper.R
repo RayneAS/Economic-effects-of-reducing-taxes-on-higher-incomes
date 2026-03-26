@@ -37,49 +37,6 @@ if (user == "Rayne") {
 
 code_dir <- file.path(working_dir, "code")
 
-#World Bank (Latin America & Caribbean – LAC)
-#List LAC countries
-
-lac_countries <- c(
-  # América do Sul
-  "Argentina",
-  "Bolivia",
-  "Brazil",
-  "Chile",
-  "Colombia",
-  "Ecuador",
-  "Guyana",
-  "Paraguay",
-  "Peru",
-  "Suriname",
-  "Uruguay",
-  "Venezuela",
-  
-  # América Central + México
-  "Mexico",
-  "Costa Rica",
-  "El Salvador",
-  "Guatemala",
-  "Honduras",
-  "Nicaragua",
-  "Panama",
-  "Belize",
-  
-  # Caribe
-  "Bahamas",
-  "Barbados",
-  "Cuba",
-  "Dominican Republic",
-  "Haiti",
-  "Jamaica",
-  "Trinidad and Tobago",
-  "Grenada",
-  "Saint Lucia",
-  "Saint Vincent and the Grenadines",
-  "Antigua and Barbuda",
-  "Saint Kitts and Nevis"
-)
-
 
 # 1 - open raw data-------------------------------------------------------------
 
@@ -94,6 +51,10 @@ reform_countries <- reform_countries[, .(Country, year,TaxRefOverhaul,
                                          TaxRefAdmReform, TaxRefPITBroad,
                                          TaxRefPITRate)]
 
+
+
+lac_countries <- unique(reform_countries$Country)
+lac_countries
 
 # 2 - Income database (World Inequality Database) -----------------------------
 
@@ -121,6 +82,13 @@ unique_countries
 
 setdiff(lac_countries, sort(unique(dt_income$Country)))
 
+dt_income[, Country := fcase(
+  Country == "Trinidad and Tobago", "Trinidad & Tobago",
+  default = Country
+)]
+
+setdiff(lac_countries, sort(unique(dt_income$Country)))
+
 
 dt_income <- dt_income[, lac := as.numeric(Country%in%lac_countries)]
 dt_income <- dt_income[lac == 1]
@@ -129,7 +97,7 @@ dt_income <- dt_income[lac == 1]
 range(dt_income$year)
 range(reform_countries$year)
 
-dt_income <- dt_income[year >= 1990 & year <= 2004]
+dt_income <- dt_income[year >= 1980 & year <= 2010]
 
 
 #merge data1
@@ -164,6 +132,7 @@ unique_countries
 
 dt_controls[, Country := fcase(
   Country == "Venezuela, RB", "Venezuela",
+  Country == "Trinidad and Tobago", "Trinidad & Tobago",
   Country == "Bahamas, The", "Bahamas",
   Country == "St. Lucia", "Saint Lucia",       
   Country == "St. Kitts and Nevis", "Saint Kitts and Nevis",
@@ -173,7 +142,7 @@ dt_controls[, Country := fcase(
 
 setdiff(lac_countries, sort(unique(dt_controls$Country)))
 
-dt_controls <- dt_controls[year >= 1990 & year <= 2004]
+dt_controls <- dt_controls[year >= 1980 & year <= 2010]
 
 
 #merge
@@ -216,13 +185,9 @@ table(panel_data_final$tax_cut, useNA = "ifany")
 table(panel_data_final$structural, useNA = "ifany")
 
 
-#check1
-panel_data_final[, overlap_inc_cut := tax_increase + tax_cut]
-table(panel_data_final$overlap_inc_cut)
 
-#check2
-colSums(panel_data_final[, .(tax_increase, tax_cut, structural,
-                             overlap_inc_cut)], na.rm = TRUE)
+#check1
+colSums(panel_data_final[, .(tax_increase, tax_cut, structural)], na.rm = TRUE)
 
 
 
@@ -241,15 +206,10 @@ panel_data_final[, g_struct :=
                  by = Country
 ]
 
-panel_data_final[, g_overlap :=
-                   ifelse(any(overlap_inc_cut == 1, na.rm = TRUE), min(year[overlap_inc_cut == 1]), 0),
-                 by = Country
-]
 
 table(panel_data_final$g_increase)
 table(panel_data_final$g_cut)
 table(panel_data_final$g_struct)
-table(panel_data_final$g_overlap)
 
 
 panel_data_final[g_increase > 0, .N, by = Country]
