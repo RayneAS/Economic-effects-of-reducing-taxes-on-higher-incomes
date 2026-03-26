@@ -128,14 +128,13 @@ kbl(
 
 
 # 3 - Define auxiliary vars to did package ------------------------------------------------------
-##tax_increase is the first reform tested
 
 setorder(panel, Code, year)
 
-#the treatment is tax_increase
+#the treatment is structural 
 
-#ever-treated: any tax reform (increase)
-panel[, treated_group := as.integer(any(structural > 0, na.rm = TRUE)), 
+#ever-treated: any tax reform (structural )
+panel[, treated_group := as.integer(any(structural  > 0, na.rm = TRUE)), 
       by = Code]
 
 panel[treated_group == 1, uniqueN(Country)]
@@ -145,8 +144,8 @@ panel[treated_group == 1, uniqueN(Code)]
 
 # first year of any tax reform
 panel[, first_treat_year := 
-        if (any(structural > 0, na.rm = TRUE)) {
-          min(year[structural > 0], na.rm = TRUE)
+        if (any(structural  > 0, na.rm = TRUE)) {
+          min(year[structural  > 0], na.rm = TRUE)
         } else {
           NA_integer_
         },
@@ -163,7 +162,7 @@ panel[treated_group == 1 & !is.na(first_treat_year) &
 panel[treated_group == 0, pre_period := 1L]
 
 
-# View(panel[,list(Country, year, tax_increase ,tax_cut,overlap_inc_cut, 
+# View(panel[,list(Country, year, structural  ,structural , 
 #                  pre_period, treated_group, first_treat_year)])
 
 #Define country numeric id did package
@@ -203,7 +202,7 @@ unique_g_var
 check_gvar <- panel[g_var > 0,
                     .(
                       gvar_unique = unique(g_var),
-                      min_year_treated = min(year[structural == 1], 
+                      min_year_treated = min(year[structural  == 1], 
                                              na.rm = TRUE)
                     ),
                     by = .(Code, Country)
@@ -320,16 +319,20 @@ kbl(
 
 
 # 5- measure of inequality: pt_share_top1-------------------------------
-
-
 #Checks
 
 panel[g_var > 0, .(n_countries = uniqueN(Code)), by = g_var][order(g_var)]
 
 panel[, .(first_obs = min(year), g = unique(g_var)), by = .(Code, Country)][order(g)]
 
-#Unconditional----------------------------
 
+# outcome
+# "pt_share_top1",
+# "d_share_top1",
+# "gini_pre_tax",
+# "gini_post_tax",
+
+#Unconditional----------------------------
 
 #Event Studies
 # main: notyettreated
@@ -395,64 +398,64 @@ ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_LA.jpg"),
 #Event Studies
 # main: notyettreated
 
-att_gt_cond <- att_gt(
-  yname = "pt_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "g_var",
-  xformla = ~ log_gdp_pc + trade_frac + 
-    gross_fixed_capital_frac ,
-  data = panel,
-  panel = TRUE,
-  control_group = "notyettreated",
-  est_method = "reg",
-  faster_mode = FALSE
-)
-
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_cond_LA.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
-
-
-
-#Event Studies
-# robustness: nevertreated
-
-att_gt_cond <- att_gt(
-  yname = "pt_share_top1",
-  tname = "year",
-  idname = "id",
-  gname = "g_var",
-  xformla = ~ log_gdp_pc + trade_frac +
-    gross_fixed_capital_frac ,
-  data = panel,
-  panel = TRUE,
-  control_group = "nevertreated",
-  est_method = "reg",
-  faster_mode = FALSE
-)
-
-es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
-summary(es_cond)
-
-p_cond <- ggdid(es_cond) +
-  labs(title = NULL)
-
-p_cond
-
-
-ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond_LA.jpg"), 
-       plot = p_cond,
-       height= 4, width = 6)
+# att_gt_cond <- att_gt(
+#   yname = "d_share_top1",
+#   tname = "year",
+#   idname = "id",
+#   gname = "g_var",
+#   xformla = ~ log_gdp_pc + trade_frac + 
+#     gross_fixed_capital_frac ,
+#   data = panel,
+#   panel = TRUE,
+#   control_group = "notyettreated",
+#   est_method = "reg",
+#   faster_mode = FALSE
+# )
+# 
+# es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
+# summary(es_cond)
+# 
+# p_cond <- ggdid(es_cond) +
+#   labs(title = NULL)
+# 
+# p_cond
+# 
+# 
+# ggsave(file.path(figure_dir, "event_study_income_share1_notyettreated_cond_LA.jpg"), 
+#        plot = p_cond,
+#        height= 4, width = 6)
+# 
+# 
+# 
+# #Event Studies
+# # robustness: nevertreated
+# 
+# att_gt_cond <- att_gt(
+#   yname = "d_share_top1",
+#   tname = "year",
+#   idname = "id",
+#   gname = "g_var",
+#   xformla = ~ log_gdp_pc + trade_frac +
+#     gross_fixed_capital_frac ,
+#   data = panel,
+#   panel = TRUE,
+#   control_group = "nevertreated",
+#   est_method = "reg",
+#   faster_mode = FALSE
+# )
+# 
+# es_cond <- aggte(att_gt_cond, type = "dynamic", min_e = -3, max_e = 5)
+# summary(es_cond)
+# 
+# p_cond <- ggdid(es_cond) +
+#   labs(title = NULL)
+# 
+# p_cond
+# 
+# 
+# ggsave(file.path(figure_dir, "event_study_income_share1_nevertreated_cond_LA.jpg"), 
+#        plot = p_cond,
+#        height= 4, width = 6)
 
 
 ##TWFE------------------------------------------------------------------
@@ -483,10 +486,3 @@ twfe_1 <- feols(
 
 summary(twfe_1)
 
-twfe_2 <- feols(
-  pt_share_top1 ~ did + log_gdp_pc | Code + year,
-  data = panel,
-  cluster = ~Code
-)
-
-summary(twfe_2)
