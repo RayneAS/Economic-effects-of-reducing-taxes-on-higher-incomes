@@ -36,10 +36,12 @@ if (user == "Rayne") {
   data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
   data_dir2 <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/TPRD"
   
-  working_dir <- "D:/rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
+  working_dir <- "C:/Users/Rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
 
 code_dir <- file.path(working_dir, "code")
+figure_dir <- file.path(working_dir, "output_artigo2")
+
 
 # 1 - open raw data------------------------------------------------------------
 
@@ -54,6 +56,13 @@ colnames(dt_fig)
 
 class(dt_fig$year_announcement)
 dt_fig[, year_announcement := as.numeric(year_announcement)]
+
+table(dt_fig$year_announcement)
+
+table(dt_fig$TAX_major)
+table(dt_fig$TAX_change)
+table(dt_fig$TAX_reformtype)
+
 
 #filter data to be like the original paper
 dt_fig <- dt_fig[year_announcement>=1990]
@@ -98,8 +107,8 @@ plot_dt[, share := N / sum(N), by = reform_dir]
 plot_dt[order(reform_dir, TAX_type)]
 
 
-#figure1
-ggplot(plot_dt, aes(x = reform_dir, y = share, fill = TAX_type)) +
+##figure1--------------------------------------------------------------------------
+fig1 <- ggplot(plot_dt, aes(x = reform_dir, y = share, fill = TAX_type)) +
   geom_col(width = 0.4) +
   scale_y_continuous(labels = percent_format(accuracy = 1), limits = c(0, 1)) +
   scale_fill_manual(values = c(
@@ -111,7 +120,7 @@ ggplot(plot_dt, aes(x = reform_dir, y = share, fill = TAX_type)) +
     "PRO" = "#F79646"
   )) +
   labs(
-    title = "(a) Percentage of changes by tax types, reform types and directions",
+    title = "",
     x = NULL, y = NULL, fill = NULL
   ) +
   theme_minimal(base_size = 14) +
@@ -121,14 +130,20 @@ ggplot(plot_dt, aes(x = reform_dir, y = share, fill = TAX_type)) +
     plot.title = element_text(hjust = 0.5)
   )
 
-#figure2
-ggplot(plot_dt, aes(x = reform_dir, y = N, fill = TAX_type)) +
+#(a) Percentage of changes by tax types, reform types and directions
+ggsave(file.path(figure_dir, "percentage_tax_types_reform_types_directions.jpg"), 
+       plot = fig1,
+       height= 4, width = 6)
+
+
+##figure2--------------------------------------------------------------------------
+fig2 <- ggplot(plot_dt, aes(x = reform_dir, y = N, fill = TAX_type)) +
   geom_col(position = position_dodge(width = 0.82), width = 0.72) +
   geom_text(
     aes(label = N),
     position = position_dodge(width = 0.82),
     vjust = -0.35,
-    size = 4.5
+    size = 2
   ) +
   scale_fill_manual(values = c(
     "CIT" = "#4F81BD",
@@ -144,7 +159,7 @@ ggplot(plot_dt, aes(x = reform_dir, y = N, fill = TAX_type)) +
     expand = expansion(mult = c(0, 0.02))
   ) +
   labs(
-    title = "(b) Number of changes by tax types, reform types and directions",
+    title = "",
     x = NULL,
     y = NULL,
     fill = NULL
@@ -156,3 +171,8 @@ ggplot(plot_dt, aes(x = reform_dir, y = N, fill = TAX_type)) +
     panel.grid.major.x = element_blank(),
     plot.title = element_text(hjust = 0.5)
   )
+
+#(b) Number of changes by tax types, reform types and directions
+ggsave(file.path(figure_dir, "number_tax_types_reform_types_directions.jpg"), 
+       plot = fig2,
+       height= 4, width = 6)
