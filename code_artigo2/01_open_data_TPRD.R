@@ -59,14 +59,81 @@ dt_fig[, year_announcement := as.numeric(year_announcement)]
 
 table(dt_fig$year_announcement)
 
-table(dt_fig$TAX_major)
-table(dt_fig$TAX_change)
-table(dt_fig$TAX_reformtype)
+  table(dt_fig$TAX_major)
+  table(dt_fig$TAX_change)
+  table(dt_fig$TAX_type)
+  table(dt_fig$TAX_reformtype)
 
-
+#checagens
+  
+  # 1. BASE
+  n_base_dec <- nrow(unique(
+    dt_fig[
+      TAX_reformtype == "BASE" & TAX_change == "DEC",
+      .(country, year_announcement)
+    ]
+  ))
+  
+  
+  n_base_inc <- nrow(unique(
+    dt_fig[
+      TAX_reformtype == "BASE" & TAX_change == "INC",
+      .(country, year_announcement)
+    ]
+  ))
+  
+  # 2. RATE
+  n_rate_dec <- nrow(unique(
+    dt_fig[
+      TAX_reformtype == "RATE" & TAX_change == "DEC",
+      .(country, year_announcement)
+    ]
+  ))
+  
+  n_rate_inc <- nrow(unique(
+    dt_fig[
+      TAX_reformtype == "RATE" & TAX_change == "INC",
+      .(country, year_announcement)
+    ]
+  ))
+  
+  # 3. BASE country-year
+  n_base <- nrow(unique(
+    dt_fig[TAX_reformtype == "BASE", .(country, year_announcement)]
+  ))
+  
+  # 4. RATE country-year
+  n_rate <- nrow(unique(
+    dt_fig[TAX_reformtype == "RATE", .(country, year_announcement)]
+  ))
+  
+  # 5. ALL country-year
+  n_all <- nrow(unique(dt_fig[, .(country, year_announcement)]))
+  
+  # 6. total measures
+  n_measures <- nrow(dt_fig)
+  
+  # 7. average
+  avg <- n_measures / n_all
+  
+  list(
+    base_country_year = n_base,
+    rate_country_year = n_rate,
+    all_country_year = n_all,
+    measures = n_measures,
+    avg = avg
+  )
+  
+  list(
+    base_dec = n_base_dec,
+    base_inc = n_base_inc,
+    rate_dec = n_rate_dec,
+    rate_inc = n_rate_inc
+  )
+  
 #filter data to be like the original paper
-dt_fig <- dt_fig[year_announcement>=1990]
-dt_fig <- dt_fig[country!="CHN" & country!="IND"]
+# dt_fig <- dt_fig[year_announcement>=1990]
+# dt_fig <- dt_fig[country!="CHN" & country!="IND"]
 dt_fig <- dt_fig[TAX_major==1]
 
 
@@ -85,6 +152,8 @@ dt_fig <- dt_fig[TAX_type %in% c("CIT", "PIT", "VAT", "SSC", "EXE", "PRO")]
 # INC = +1, DEC = -1
 dt_fig[, a := fifelse(TAX_change == "INC", 1L, -1L)]
 
+#View(dt_fig[,list(country,year_announcement, TAX_change, a, TAX_reformtype)]) 
+
 table(dt_fig$TAX_change)
 table(dt_fig$a)
 
@@ -95,6 +164,9 @@ coded_dt <- dt_fig[
   .(A = sum(a)),
   by = .(country, year_announcement, TAX_type, TAX_reformtype)
 ]
+
+
+#View(coded_dt[,list(country,year_announcement,TAX_reformtype,A)]) 
 
 # Convert the aggregated sign into the coded reform direction
 # A > 0  -> inc
@@ -107,10 +179,16 @@ coded_dt[, dir_coded := fifelse(
 
 coded_dt <- coded_dt[!is.na(dir_coded)]
 
+#View(coded_dt[,list(country,year_announcement,TAX_reformtype,A, dir_coded)]) 
+
+
 # Create combined x-axis variable
 coded_dt[, reform_dir := paste0(
   tolower(TAX_reformtype), "_", dir_coded
 )]
+
+# View(coded_dt[,list(country,year_announcement,TAX_reformtype,A, dir_coded, 
+#                     reform_dir)]) 
 
 table(coded_dt$reform_dir, useNA = "ifany")
 
@@ -134,7 +212,7 @@ plot_dt[, share := N / sum(N), by = reform_dir]
 # Check final table
 plot_dt[order(reform_dir, TAX_type)]
 
-# Optional: wide-format check
+#wide-format check
 dcast(plot_dt, TAX_type ~ reform_dir, value.var = "N")
 
 ## figure1 ---------------------------------------------------------------------
@@ -219,29 +297,50 @@ ggsave(
 )
 
 
+#teste
+# country-year com pelo menos um INC
+inc_cy <- unique(
+  dt_fig[
+    TAX_major==1 & TAX_reformtype=="BASE" & TAX_change=="INC",
+    .(country, year_announcement)
+  ]
+)
+
+# country-year cujo resultado líquido é INC
+net_inc <- coded_dt[
+  TAX_reformtype=="BASE" & A > 0,
+  .(country, year_announcement)
+]
+
+# diferença
+bad_cases <- fsetdiff(inc_cy, net_inc)
+bad_cases
+
+nrow(bad_cases)
+
 ## figure3 ---------------------------------------------------------------------
 
-# NÃO remover zeros aqui
+#keep zeros
 heat_dt <- dt_fig[
   ,
   .(TC = sum(a)),
   by = .(country, year_announcement, TAX_type, TAX_reformtype)
 ]
 
-# criar nome das colunas: CIT_b, CIT_r etc.
+#create collumns: CIT_b, CIT_r etc.
 heat_dt[, var := paste0(
   TAX_type, "_",
   ifelse(TAX_reformtype == "BASE", "b", "r")
 )]
 
-# agregar para nível ano (somando países)
+#aggregate (sum countries)
 heat_dt_year <- heat_dt[
   ,
   .(TC = sum(TC)),
   by = .(year_announcement, var)
 ]
 
-# transformar para wide (formato da tabela do paper)
+#change to wide
 heat_wide <- dcast(
   heat_dt_year,
   year_announcement ~ var,
@@ -249,10 +348,9 @@ heat_wide <- dcast(
   fill = 0
 )
 
-# ordenar anos
+#order years
 setorder(heat_wide, year_announcement)
 
-# visualizar
 heat_wide
 
 heat_long <- melt(
@@ -283,7 +381,7 @@ fig3 <- ggplot(heat_long, aes(x = tax_var, y = year_announcement, fill = TC)) +
   geom_tile(color = "white") +
   geom_text(aes(label = TC), size = 3) +
   
-  scale_x_discrete(position = "top") +   #legenda no topo
+  scale_x_discrete(position = "top") +
   
   scale_fill_gradient2(
     low = "#d6604d",
@@ -301,7 +399,7 @@ fig3 <- ggplot(heat_long, aes(x = tax_var, y = year_announcement, fill = TC)) +
     panel.grid = element_blank(),
     
     axis.text.x = element_text(
-      angle = 0,      #reto
+      angle = 0,      
       hjust = 0.5,
       size = 11
     ),
@@ -310,3 +408,10 @@ fig3 <- ggplot(heat_long, aes(x = tax_var, y = year_announcement, fill = TC)) +
   )
 
 fig3
+
+ggsave(
+  file.path(figure_dir, "heatmap.jpg"),
+  plot = fig3,
+  height = 6,
+  width = 10
+)
