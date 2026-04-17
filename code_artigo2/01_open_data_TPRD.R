@@ -401,47 +401,105 @@ ggsave(
 
 rm(plot_dt, heat_dt_year, heat_long, heat_wide)
 
-# 3 - Prepare base to merge -----------------------------------------------------------
+# 3 - Build estimation panel --------------------------------------------------
 
-## 3.1 Open Inequality data it was cleaned and organized by 
-#Mariana in another code 
-dt_income <- data.table(
-  read_csv(
-    file.path(data_dir, "final_data_inequality_WID.csv")))
+# starting from dt_fig after:
+# year >= 1990, exclude CHN/IND, TAX_major == 1,
+# TAX_reformtype in BASE/RATE, TAX_change in INC/DEC, TAX_type in six taxes
 
-colnames(dt_income)
 
-dt_income <- dt_income[, ("Country") := NULL]
+est_dt <- dt_fig[
+  ,
+  .(TC = sum(a)),
+  by = .(country, year_announcement, TAX_type, TAX_reformtype)
+]
+
+est_dt[, shock_var := paste0(
+  TAX_type, "_",
+  ifelse(TAX_reformtype == "BASE", "b", "r")
+)]
+
+est_wide <- dcast(
+  est_dt,
+  country + year_announcement ~ shock_var,
+  value.var = "TC",
+  fill = 0
+)
+
+setnames(est_wide, "year_announcement", "year")
+est_wide[, year := as.integer(year)]
+
+# define estimation window from inequality data or chosen sample
+year_min <- 1990
+year_max <- 2014
+
+# countries you want in the final sample
+countries <- sort(unique(est_wide$country))
+
+# full country-year skeleton
+skeleton <- CJ(
+  country = countries,
+  year = seq(year_min, year_max)
+)
+
+# merge reform shocks onto full panel
+est_wide_full <- merge(
+  skeleton,
+  est_wide,
+  by = c("country", "year"),
+  all.x = TRUE
+)
+
+# identify shock columns
+shock_vars <- setdiff(names(est_wide), c("country", "year"))
+
+# replace missing shocks with zero
+for (v in shock_vars) {
+  set(
+    est_wide_full,
+    i = which(is.na(est_wide_full[[v]])),
+    j = v,
+    value = 0
+  )
+}
+
+# inequality data
+dt_income <- data.table(read_csv(file.path(data_dir, "final_data_inequality_WID.csv")))
 dt_income[, year := as.integer(year)]
-setnames(dt_income, "Code","country")
+setnames(dt_income, "Code", "country")
 
-setorder(dt_income, country, year)
-stopifnot(is.integer(dt_income$year))
-
-unique_countries <- sort(unique(dt_income$country))
-unique_countries
-
-unique_countries <- sort(unique(heat_dt$country))
-unique_countries
-
-setdiff((unique(heat_dt$country)),(unique(dt_income$Country)))
-
-#Adjust country code
+# if country is iso2 here
 dt_income[, country_iso3 := countrycode(country, "iso2c", "iso3c")]
-
 dt_income[country_iso3 == "DEU", country_iso3 := "GER"]
-
-setdiff(unique(heat_dt$country), unique(dt_income$country_iso3))
-
-dt_income <- dt_income[, ("country") := NULL]
-setnames(dt_income, "country_iso3","country")
+dt_income[, country := country_iso3]
+dt_income[, country_iso3 := NULL]
 
 
-#change var name
-setnames(heat_dt, "year_announcement","year")
+# now merge with inequality data
+panel_data <- merge(
+  est_wide_full,
+  dt_income,
+  by = c("country", "year"),
+  all.x = TRUE
+)
 
+setorder(panel_data, country, year)
 
-#merge data1
-panel_data <- merge(heat_dt, dt_income, by = c("country", "year"), 
-                    all.x = TRUE)
+# critical checks
+panel_data[, .N, by = .(country, year)][N > 1]
 
+panel_data[, lapply(.SD, function(x) sum(is.na(x))), .SDcols = shock_vars]
+
+panel_data[, .N, by = country]
+
+panel_data[, sum(is.na(d_share_top0_01))]
+
+#Create leads
+setorder(panel_data, country, year)
+
+for (h in 0:5) {
+  panel_data[, paste0("y_h", h) :=
+               shift(d_share_top0_01, n = h, type = "lead"),
+             by = country
+  ]
+}
