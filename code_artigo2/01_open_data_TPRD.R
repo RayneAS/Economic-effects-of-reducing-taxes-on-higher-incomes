@@ -8,7 +8,8 @@ packages <- c(
   "readxl",
   "haven",
   "ggplot2",
-  "scales"
+  "scales",
+  "countrycode"
 )
 
 installed <- rownames(installed.packages())
@@ -27,6 +28,8 @@ library(readxl)
 library(haven)
 library(ggplot2)
 library(scales)
+library(countrycode)
+
 
 
 # Set user
@@ -132,8 +135,8 @@ table(dt_fig$year_announcement)
   )
   
 #filter data to be like the original paper
-# dt_fig <- dt_fig[year_announcement>=1990]
-# dt_fig <- dt_fig[country!="CHN" & country!="IND"]
+dt_fig <- dt_fig[year_announcement>=1990]
+dt_fig <- dt_fig[country!="CHN" & country!="IND"]
 dt_fig <- dt_fig[TAX_major==1]
 
 
@@ -148,6 +151,7 @@ dt_fig <- dt_fig[
 # Keep only tax types shown in Figure 2
 dt_fig <- dt_fig[TAX_type %in% c("CIT", "PIT", "VAT", "SSC", "EXE", "PRO")]
 
+
 # Code direction of each raw reform:
 # INC = +1, DEC = -1
 dt_fig[, a := fifelse(TAX_change == "INC", 1L, -1L)]
@@ -158,7 +162,6 @@ table(dt_fig$TAX_change)
 table(dt_fig$a)
 
 # Aggregate within country-year-tax type-reform type
-# This is the key correction relative to the previous code
 coded_dt <- dt_fig[
   ,
   .(A = sum(a)),
@@ -297,26 +300,6 @@ ggsave(
 )
 
 
-#teste
-# country-year com pelo menos um INC
-inc_cy <- unique(
-  dt_fig[
-    TAX_major==1 & TAX_reformtype=="BASE" & TAX_change=="INC",
-    .(country, year_announcement)
-  ]
-)
-
-# country-year cujo resultado líquido é INC
-net_inc <- coded_dt[
-  TAX_reformtype=="BASE" & A > 0,
-  .(country, year_announcement)
-]
-
-# diferença
-bad_cases <- fsetdiff(inc_cy, net_inc)
-bad_cases
-
-nrow(bad_cases)
 
 ## figure3 ---------------------------------------------------------------------
 
@@ -415,3 +398,50 @@ ggsave(
   height = 6,
   width = 10
 )
+
+rm(plot_dt, heat_dt_year, heat_long, heat_wide)
+
+# 3 - Prepare base to merge -----------------------------------------------------------
+
+## 3.1 Open Inequality data it was cleaned and organized by 
+#Mariana in another code 
+dt_income <- data.table(
+  read_csv(
+    file.path(data_dir, "final_data_inequality_WID.csv")))
+
+colnames(dt_income)
+
+dt_income <- dt_income[, ("Country") := NULL]
+dt_income[, year := as.integer(year)]
+setnames(dt_income, "Code","country")
+
+setorder(dt_income, country, year)
+stopifnot(is.integer(dt_income$year))
+
+unique_countries <- sort(unique(dt_income$country))
+unique_countries
+
+unique_countries <- sort(unique(heat_dt$country))
+unique_countries
+
+setdiff((unique(heat_dt$country)),(unique(dt_income$Country)))
+
+#Adjust country code
+dt_income[, country_iso3 := countrycode(country, "iso2c", "iso3c")]
+
+dt_income[country_iso3 == "DEU", country_iso3 := "GER"]
+
+setdiff(unique(heat_dt$country), unique(dt_income$country_iso3))
+
+dt_income <- dt_income[, ("country") := NULL]
+setnames(dt_income, "country_iso3","country")
+
+
+#change var name
+setnames(heat_dt, "year_announcement","year")
+
+
+#merge data1
+panel_data <- merge(heat_dt, dt_income, by = c("country", "year"), 
+                    all.x = TRUE)
+
