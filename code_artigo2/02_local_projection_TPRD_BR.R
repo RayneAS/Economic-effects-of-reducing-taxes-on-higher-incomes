@@ -156,7 +156,6 @@ table(dt_fig$a)
 # year >= 1990, exclude CHN/IND, TAX_major == 1,
 # TAX_reformtype in BASE/RATE, TAX_change in INC/DEC, TAX_type in six taxes
 
-
 est_dt <- dt_fig[
   ,
   .(TC = sum(a)),
@@ -213,7 +212,8 @@ for (v in shock_vars) {
 }
 
 # inequality data
-dt_income <- data.table(read_csv(file.path(data_dir, "final_data_inequality_WID.csv")))
+dt_income <- data.table(read_csv(file.path(data_dir, 
+                                           "final_data_inequality_WID.csv")))
 dt_income[, year := as.integer(year)]
 setnames(dt_income, "Code", "country")
 
@@ -222,7 +222,6 @@ dt_income[, country_iso3 := countrycode(country, "iso2c", "iso3c")]
 dt_income[country_iso3 == "DEU", country_iso3 := "GER"]
 dt_income[, country := country_iso3]
 dt_income[, country_iso3 := NULL]
-
 
 # now merge with inequality data
 panel_data <- merge(
@@ -252,3 +251,66 @@ for (h in 0:5) {
              by = country
   ]
 }
+
+# 4 - Estimate for Brazil -----------------------------------------
+panel_br <- panel_data[country == "BRA"]
+
+
+#define shock for 
+#panel_br[, shock := CIT_b + CIT_r + PIT_b + PIT_r + VAT_b + VAT_r]
+panel_br[, shock :=  PIT_b + PIT_r ]
+
+
+panel_br[, y_lag1 := shift(d_share_top0_01, 1)]
+
+for (h in 0:5) {
+  panel_br[, paste0("dep_h", h) :=
+             get(paste0("y_h", h)) - y_lag1]
+}
+
+
+panel_br[, dy_lag1 := shift(d_share_top0_01, 1)]
+panel_br[, dy_lag2 := shift(d_share_top0_01, 2)]
+
+
+#panel_br[, dy_lag1 := shift(gini_post_tax, 1)]
+#panel_br[, dy_lag2 := shift(gini_post_tax, 2)]
+
+#local projections
+library(fixest)
+
+horizons <- 0:5
+
+results <- lapply(horizons, function(h){
+  
+  dep_var <- paste0("dep_h", h)
+  
+  feols(
+    as.formula(paste(dep_var, "~ shock + dy_lag1 + dy_lag2")),
+    data = panel_br
+  )
+})
+
+
+
+irf <- data.table(
+  h = horizons,
+  beta = sapply(results, function(x) coef(x)["shock"]),
+  se = sapply(results, function(x) se(x)["shock"])
+)
+
+irf[, upper := beta + 1.96 * se]
+irf[, lower := beta - 1.96 * se]
+
+
+#plotar modelo
+ggplot(irf, aes(x = h, y = beta)) +
+  geom_line() +
+  geom_point() +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Resposta da desigualdade a choques tributários (Brasil)",
+    x = "Horizonte (anos)",
+    y = "Efeito"
+  )
