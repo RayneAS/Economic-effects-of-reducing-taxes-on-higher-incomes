@@ -29,6 +29,8 @@ library(haven)
 library(ggplot2)
 library(scales)
 library(countrycode)
+library(fixest)
+
 
 
 
@@ -211,7 +213,7 @@ for (v in shock_vars) {
   )
 }
 
-# inequality data
+# inequality data-----------------------------------
 dt_income <- data.table(read_csv(file.path(data_dir, 
                                            "final_data_inequality_WID.csv")))
 dt_income[, year := as.integer(year)]
@@ -233,6 +235,18 @@ panel_data <- merge(
 
 setorder(panel_data, country, year)
 
+# controls data-----------------------------------
+dt_controls <- data.table(
+  read_csv(
+    file.path(data_dir, "control_variables_all_countries.csv")))
+
+setdiff(sort(unique(panel_data$country)), sort(unique(dt_controls$Code)))
+
+dt_controls[, country_iso3 := countrycode(Code, "iso2c", "iso3c")]
+dt_controls[country_iso3 == "DEU", country_iso3 := "GER"]
+dt_controls[, Code := country_iso3]
+dt_controls[, country_iso3 := NULL]
+
 # critical checks
 panel_data[, .N, by = .(country, year)][N > 1]
 
@@ -253,45 +267,39 @@ for (h in 0:5) {
 }
 
 # 4 - Estimate for Brazil -----------------------------------------
-panel_br <- panel_data[country == "BRA"]
 
+panel_br <- copy(panel_data[country == "BRA"])
+setorder(panel_br, year)
 
-#define shock for 
-#panel_br[, shock := CIT_b + CIT_r + PIT_b + PIT_r + VAT_b + VAT_r]
-panel_br[, shock :=  PIT_b + PIT_r ]
+# Choque PIT
+#panel_br[, shock := as.integer((PIT_b != 0) | (PIT_r != 0))]
+#panel_br[, shock := as.integer((PIT_b != 0))]
+panel_br[, shock := as.integer((PIT_r != 0))]
 
+#tendencia
+panel_br[, trend := year - min(year, na.rm = TRUE)]
 
+# Lags do outcome
 panel_br[, y_lag1 := shift(d_share_top0_01, 1)]
+panel_br[, y_lag2 := shift(d_share_top0_01, 2)]
 
+# Variável dependente acumulada: y_{t+h} - y_{t-1}
 for (h in 0:5) {
   panel_br[, paste0("dep_h", h) :=
-             get(paste0("y_h", h)) - y_lag1]
+             shift(d_share_top0_01, n = h, type = "lead") - y_lag1]
 }
-
-
-panel_br[, dy_lag1 := shift(d_share_top0_01, 1)]
-panel_br[, dy_lag2 := shift(d_share_top0_01, 2)]
-
-
-#panel_br[, dy_lag1 := shift(gini_post_tax, 1)]
-#panel_br[, dy_lag2 := shift(gini_post_tax, 2)]
-
-#local projections
-library(fixest)
 
 horizons <- 0:5
 
-results <- lapply(horizons, function(h){
+results <- lapply(horizons, function(h) {
   
   dep_var <- paste0("dep_h", h)
   
   feols(
-    as.formula(paste(dep_var, "~ shock + dy_lag1 + dy_lag2")),
+    as.formula(paste0(dep_var, " ~ shock + y_lag1 + y_lag2 + trend")),
     data = panel_br
   )
 })
-
-
 
 irf <- data.table(
   h = horizons,
@@ -303,14 +311,20 @@ irf[, upper := beta + 1.96 * se]
 irf[, lower := beta - 1.96 * se]
 
 
-#plotar modelo
+#grafico---------------------------
 ggplot(irf, aes(x = h, y = beta)) +
   geom_line() +
   geom_point() +
   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   labs(
-    title = "Resposta da desigualdade a choques tributários (Brasil)",
-    x = "Horizonte (anos)",
-    y = "Efeito"
+    title = "Resposta da desigualdade a choques tributários - Brasil",
+    x = "Horizonte em anos",
+    y = expression(y[t+h] - y[t-1])
   )
+
+ggplot(panel_br, aes(year, shock)) +
+  geom_col()
+
+
+panel_br[, fake_shock := shift(shock, 5)]
