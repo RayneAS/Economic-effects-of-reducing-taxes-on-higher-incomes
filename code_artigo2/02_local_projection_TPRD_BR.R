@@ -1,7 +1,13 @@
 rm(list = ls())
 gc()
 
-#Install packages
+# =============================================================================
+# Local Projections - Tax reforms and inequality
+# Brazil-only exploratory exercise
+# =============================================================================
+
+# 0 - Packages ----------------------------------------------------------------
+
 packages <- c(
   "data.table",
   "readr",
@@ -9,7 +15,8 @@ packages <- c(
   "haven",
   "ggplot2",
   "scales",
-  "countrycode"
+  "countrycode",
+  "fixest"
 )
 
 installed <- rownames(installed.packages())
@@ -31,13 +38,12 @@ library(scales)
 library(countrycode)
 library(fixest)
 
+# 1 - Directories -------------------------------------------------------------
 
-
-
-# Set user
-user = "Rayne"
+user <- "Rayne"
 
 if (user == "Rayne") {
+  
   data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
   data_dir2 <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/TPRD"
   
@@ -48,7 +54,7 @@ code_dir <- file.path(working_dir, "code")
 figure_dir <- file.path(working_dir, "output_artigo2")
 
 
-# 1 - open raw data------------------------------------------------------------
+# 2 - Open TPRD data ----------------------------------------------------------
 
 raw_dt <- as.data.table(read_excel(
   file.path(data_dir2, "taxmeasuresdatabase.xlsx"),
@@ -57,68 +63,50 @@ raw_dt <- as.data.table(read_excel(
 
 dt_fig <- copy(raw_dt)
 
-colnames(dt_fig)
-
-class(dt_fig$year_announcement)
 dt_fig[, year_announcement := as.numeric(year_announcement)]
 
-table(dt_fig$year_announcement)
 
+# 3 - Initial checks ----------------------------------------------------------
+
+table(dt_fig$year_announcement)
 table(dt_fig$TAX_major)
 table(dt_fig$TAX_change)
 table(dt_fig$TAX_type)
 table(dt_fig$TAX_reformtype)
 
-#some checks
+# Country-year counts by reform type/change
+n_base_dec <- nrow(unique(dt_fig[
+  TAX_reformtype == "BASE" & TAX_change == "DEC",
+  .(country, year_announcement)
+]))
 
-# 1. BASE
-n_base_dec <- nrow(unique(
-  dt_fig[
-    TAX_reformtype == "BASE" & TAX_change == "DEC",
-    .(country, year_announcement)
-  ]
-))
+n_base_inc <- nrow(unique(dt_fig[
+  TAX_reformtype == "BASE" & TAX_change == "INC",
+  .(country, year_announcement)
+]))
 
+n_rate_dec <- nrow(unique(dt_fig[
+  TAX_reformtype == "RATE" & TAX_change == "DEC",
+  .(country, year_announcement)
+]))
 
-n_base_inc <- nrow(unique(
-  dt_fig[
-    TAX_reformtype == "BASE" & TAX_change == "INC",
-    .(country, year_announcement)
-  ]
-))
+n_rate_inc <- nrow(unique(dt_fig[
+  TAX_reformtype == "RATE" & TAX_change == "INC",
+  .(country, year_announcement)
+]))
 
-# 2. RATE
-n_rate_dec <- nrow(unique(
-  dt_fig[
-    TAX_reformtype == "RATE" & TAX_change == "DEC",
-    .(country, year_announcement)
-  ]
-))
+n_base <- nrow(unique(dt_fig[
+  TAX_reformtype == "BASE",
+  .(country, year_announcement)
+]))
 
-n_rate_inc <- nrow(unique(
-  dt_fig[
-    TAX_reformtype == "RATE" & TAX_change == "INC",
-    .(country, year_announcement)
-  ]
-))
+n_rate <- nrow(unique(dt_fig[
+  TAX_reformtype == "RATE",
+  .(country, year_announcement)
+]))
 
-# 3. BASE country-year
-n_base <- nrow(unique(
-  dt_fig[TAX_reformtype == "BASE", .(country, year_announcement)]
-))
-
-# 4. RATE country-year
-n_rate <- nrow(unique(
-  dt_fig[TAX_reformtype == "RATE", .(country, year_announcement)]
-))
-
-# 5. ALL country-year
 n_all <- nrow(unique(dt_fig[, .(country, year_announcement)]))
-
-# 6. total measures
 n_measures <- nrow(dt_fig)
-
-# 7. average
 avg <- n_measures / n_all
 
 list(
@@ -136,27 +124,24 @@ list(
   rate_inc = n_rate_inc
 )
 
-#filter data to be like the original paper
-dt_fig <- dt_fig[year_announcement>=1990]
-dt_fig <- dt_fig[country!="CHN" & country!="IND"]
-dt_fig <- dt_fig[TAX_major==1]
 
+# 4 - Clean TPRD sample -------------------------------------------------------
 
-# Code direction of each raw reform:
+dt_fig <- dt_fig[
+  year_announcement >= 1990 &
+    !country %in% c("CHN", "IND") &
+    TAX_major == 1
+]
+
+# Direction of reform:
 # INC = +1, DEC = -1
 dt_fig[, a := fifelse(TAX_change == "INC", 1L, -1L)]
-
-#View(dt_fig[,list(country,year_announcement, TAX_change, a, TAX_reformtype)]) 
 
 table(dt_fig$TAX_change)
 table(dt_fig$a)
 
 
-# 2 - Build estimation panel --------------------------------------------------
-
-# starting from dt_fig after:
-# year >= 1990, exclude CHN/IND, TAX_major == 1,
-# TAX_reformtype in BASE/RATE, TAX_change in INC/DEC, TAX_type in six taxes
+# 5 - Build reform-shock panel ------------------------------------------------
 
 est_dt <- dt_fig[
   ,
@@ -179,20 +164,16 @@ est_wide <- dcast(
 setnames(est_wide, "year_announcement", "year")
 est_wide[, year := as.integer(year)]
 
-# define estimation window from inequality data or chosen sample
 year_min <- 1990
 year_max <- 2014
 
-# countries you want in the final sample
 countries <- sort(unique(est_wide$country))
 
-# full country-year skeleton
 skeleton <- CJ(
   country = countries,
   year = seq(year_min, year_max)
 )
 
-# merge reform shocks onto full panel
 est_wide_full <- merge(
   skeleton,
   est_wide,
@@ -200,10 +181,8 @@ est_wide_full <- merge(
   all.x = TRUE
 )
 
-# identify shock columns
 shock_vars <- setdiff(names(est_wide), c("country", "year"))
 
-# replace missing shocks with zero
 for (v in shock_vars) {
   set(
     est_wide_full,
@@ -213,46 +192,57 @@ for (v in shock_vars) {
   )
 }
 
-# 3 - open inequality data------------------------------------------------------
-dt_income <- data.table(read_csv(file.path(data_dir, 
-                                           "final_data_inequality_WID.csv")))
+
+# 6 - Open inequality data ----------------------------------------------------
+
+dt_income <- as.data.table(read_csv(
+  file.path(data_dir, "final_data_inequality_WID.csv")
+))
+
 dt_income[, year := as.integer(year)]
 setnames(dt_income, "Code", "country")
 
-# if country is iso2 here
+# Harmonize country codes
 dt_income[, country_iso3 := countrycode(country, "iso2c", "iso3c")]
 dt_income[country_iso3 == "DEU", country_iso3 := "GER"]
 dt_income[, country := country_iso3]
 dt_income[, country_iso3 := NULL]
 
 
-# 4 - Open controls data--------------------------------------------------
-dt_controls <- data.table(
-  read_csv(
-    file.path(data_dir, "control_variables_all_countries.csv")))
+# 7 - Open and clean controls -------------------------------------------------
 
-colnames(dt_controls)
+dt_controls <- as.data.table(read_csv(
+  file.path(data_dir, "control_variables_all_countries.csv")
+))
 
-setdiff(sort(unique(est_wide_full$country)), sort(unique(dt_controls$Code)))
+dt_controls[, year := as.integer(year)]
 
-unique_country <- unique(dt_controls$Code)
-unique_country
-
-unique_country <- unique(est_wide_full$country)
-unique_country
-
+# Harmonize Germany code
 dt_controls[Code == "DEU", Code := "GER"]
 
 setnames(dt_controls, c("Code", "Country"), c("country", "country_name"))
 
+# Keep only countries in estimation sample
+dt_controls <- dt_controls[
+  country %in% unique(est_wide_full$country)
+]
+
+# Check duplicates before merge
+dt_controls[, .N, by = .(country, year)][N > 1]
+
+# Keep selected controls
 dt_controls <- dt_controls[, .(
-  country, country_name, year,
+  country,
+  country_name,
+  year,
   gdp_pc,
   trade,
-  working_age_pop)]
+  working_age_pop
+)]
 
 
-# 5 - merge dataset with inequality and control data ---------------------------
+# 8 - Merge datasets ----------------------------------------------------------
+
 panel_data <- merge(
   est_wide_full,
   dt_income,
@@ -267,99 +257,80 @@ panel_data <- merge(
   all.x = TRUE
 )
 
-
-colnames(panel_data)
-
 setorder(panel_data, country, year)
 
 
-# critical checks
+# 9 - Critical checks ---------------------------------------------------------
+
+# Duplicates
 panel_data[, .N, by = .(country, year)][N > 1]
 
+# Missing shocks
 panel_data[, lapply(.SD, function(x) sum(is.na(x))), .SDcols = shock_vars]
 
+# Number of years by country
 panel_data[, .N, by = country]
 
+# Missing outcome
 panel_data[, sum(is.na(d_share_top0_01))]
 
-#Create leads
-setorder(panel_data, country, year)
+# Missing controls for Brazil
+panel_data[country == "BRA",
+           .(
+             missing_gdp_pc = sum(is.na(gdp_pc)),
+             missing_trade = sum(is.na(trade)),
+             missing_working_age_pop = sum(is.na(working_age_pop))
+           )]
 
-for (h in 0:5) {
-  panel_data[, paste0("y_h", h) :=
-               shift(d_share_top0_01, n = h, type = "lead"),
-             by = country
-  ]
-}
 
+# 10 - Transform controls -----------------------------------------------------
 
 panel_data[, log_gdp_pc := log(gdp_pc)]
 panel_data[, trade_frac := trade / 100]
 panel_data[, working_age_pop_frac := working_age_pop / 100]
 
-# 6 - Estimate for Brazil -----------------------------------------
+
+# 11 - Create leads -----------------------------------------------------------
+
+for (h in 0:5) {
+  panel_data[, paste0("y_h", h) :=
+               shift(d_share_top0_01, n = h, type = "lead"),
+             by = country]
+}
+
+
+# 12 - Brazil sample ----------------------------------------------------------
 
 panel_br <- copy(panel_data[country == "BRA"])
 setorder(panel_br, year)
 
-# Choque PIT
+# PIT shock dummy
 panel_br[, shock := as.integer((PIT_b != 0) | (PIT_r != 0))]
-#panel_br[, shock := as.integer((PIT_b != 0))]
-#panel_br[, shock := as.integer((PIT_r != 0))]
 
-#tendencia
+# Alternative shocks
+# panel_br[, shock := as.integer(PIT_b != 0)]
+# panel_br[, shock := as.integer(PIT_r != 0)]
+
+# Trend
 panel_br[, trend := year - min(year, na.rm = TRUE)]
 
-# Lags do outcome
+# Outcome lags
 panel_br[, y_lag1 := shift(d_share_top0_01, 1)]
 panel_br[, y_lag2 := shift(d_share_top0_01, 2)]
 
-# Variável dependente acumulada: y_{t+h} - y_{t-1}
+# Cumulative dependent variable: y_{t+h} - y_{t-1}
 for (h in 0:5) {
   panel_br[, paste0("dep_h", h) :=
              shift(d_share_top0_01, n = h, type = "lead") - y_lag1]
 }
 
+# Check shock years
+panel_br[shock == 1, .(year, PIT_b, PIT_r, shock)]
+
+
+# 13 - Estimate LPs -----------------------------------------------------------
+
 horizons <- 0:5
-
-results <- lapply(horizons, function(h) {
-  
-  dep_var <- paste0("dep_h", h)
-  
-  feols(
-    as.formula(paste0(dep_var, " ~ shock + y_lag1 + y_lag2 + trend")),
-    data = panel_br
-  )
-})
-
-irf <- data.table(
-  h = horizons,
-  beta = sapply(results, function(x) coef(x)["shock"]),
-  se = sapply(results, function(x) se(x)["shock"])
-)
-
-irf[, upper := beta + 1.96 * se]
-irf[, lower := beta - 1.96 * se]
-
-
-#grafico---------------------------
-ggplot(irf, aes(x = h, y = beta)) +
-  geom_line() +
-  geom_point() +
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(
-    title = "Resposta da desigualdade a choques tributários - Brasil",
-    x = "Horizonte em anos",
-    y = expression(y[t+h] - y[t-1])
-  )
-
-ggplot(panel_br, aes(year, shock)) +
-  geom_col()
-
-
-panel_br[, fake_shock := shift(shock, 5)]
-
 
 specs <- list(
   baseline = "shock + y_lag1 + y_lag2 + trend",
@@ -367,3 +338,137 @@ specs <- list(
   demo = "shock + y_lag1 + y_lag2 + trend + working_age_pop_frac",
   full = "shock + y_lag1 + y_lag2 + trend + log_gdp_pc + trade_frac + working_age_pop_frac"
 )
+
+lp_results <- list()
+
+for (s in names(specs)) {
+  
+  lp_results[[s]] <- lapply(horizons, function(h) {
+    
+    dep_var <- paste0("dep_h", h)
+    
+    feols(
+      as.formula(paste0(dep_var, " ~ ", specs[[s]])),
+      data = panel_br
+    )
+  })
+}
+
+
+# 14 - Extract IRFs -----------------------------------------------------------
+
+irf_all <- rbindlist(lapply(names(lp_results), function(s) {
+  
+  data.table(
+    spec = s,
+    h = horizons,
+    beta = sapply(lp_results[[s]], function(x) coef(x)["shock"]),
+    se = sapply(lp_results[[s]], function(x) se(x)["shock"])
+  )
+}))
+
+irf_all[, upper := beta + 1.96 * se]
+irf_all[, lower := beta - 1.96 * se]
+
+
+# 15 - Plot IRFs --------------------------------------------------------------
+
+ggplot(irf_all, aes(x = h, y = beta, color = spec, group = spec)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Local projections com diferentes controles - Brasil",
+    x = "Horizonte em anos",
+    y = expression(y[t+h] - y[t-1]),
+    color = "Especificação"
+  ) +
+  theme_minimal()
+
+
+
+ggplot(irf_all, aes(x = h, y = beta)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  facet_wrap(~ spec) +
+  labs(
+    title = "Local projections por especificação - Brasil",
+    x = "Horizonte em anos",
+    y = expression(y[t+h] - y[t-1])
+  ) +
+  theme_minimal()
+
+# 16 - Plot shock years -------------------------------------------------------
+
+ggplot(panel_br, aes(year, shock)) +
+  geom_col() +
+  labs(
+    title = "Anos com choque PIT - Brasil",
+    x = "Ano",
+    y = "Choque"
+  )
+
+
+# 17 - Placebo shock ----------------------------------------------------------
+
+panel_br[, fake_shock := shift(shock, 5)]
+panel_br[fake_shock == 1, .(year, shock, fake_shock)]
+
+
+placebo_results <- lapply(horizons, function(h) {
+  
+  dep_var <- paste0("dep_h", h)
+  
+  feols(
+    as.formula(
+      paste0(dep_var,
+             " ~ fake_shock + y_lag1 + y_lag2 + trend")
+    ),
+    data = panel_br
+  )
+})
+
+
+irf_placebo <- data.table(
+  h = horizons,
+  beta = sapply(placebo_results,
+                function(x) coef(x)["fake_shock"]),
+  se = sapply(placebo_results,
+              function(x) se(x)["fake_shock"])
+)
+
+irf_placebo[, upper := beta + 1.96 * se]
+irf_placebo[, lower := beta - 1.96 * se]
+
+irf_placebo[, spec := "placebo"]
+
+irf_comp <- irf_all[ spec == "baseline"]
+
+irf_compare <- rbind(
+  irf_comp[, .(h, beta, lower, upper, spec)],
+  irf_placebo[, .(h, beta, lower, upper, spec)]
+)
+
+
+ggplot(irf_compare,
+       aes(x = h,
+           y = beta,
+           color = spec,
+           group = spec)) +
+  
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  
+  geom_hline(yintercept = 0,
+             linetype = "dashed") +
+  
+  labs(
+    title = "Baseline vs placebo shock",
+    x = "Horizonte em anos",
+    y = expression(y[t+h] - y[t-1]),
+    color = "Modelo"
+  ) +
+  
+  theme_minimal()
