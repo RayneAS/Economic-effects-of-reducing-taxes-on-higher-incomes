@@ -69,7 +69,7 @@ table(dt_fig$TAX_change)
 table(dt_fig$TAX_type)
 table(dt_fig$TAX_reformtype)
 
-#checagens
+#some checks
 
 # 1. BASE
 n_base_dec <- nrow(unique(
@@ -152,7 +152,7 @@ table(dt_fig$TAX_change)
 table(dt_fig$a)
 
 
-# 3 - Build estimation panel --------------------------------------------------
+# 2 - Build estimation panel --------------------------------------------------
 
 # starting from dt_fig after:
 # year >= 1990, exclude CHN/IND, TAX_major == 1,
@@ -213,7 +213,7 @@ for (v in shock_vars) {
   )
 }
 
-# inequality data-----------------------------------
+# 3 - open inequality data------------------------------------------------------
 dt_income <- data.table(read_csv(file.path(data_dir, 
                                            "final_data_inequality_WID.csv")))
 dt_income[, year := as.integer(year)]
@@ -225,7 +225,34 @@ dt_income[country_iso3 == "DEU", country_iso3 := "GER"]
 dt_income[, country := country_iso3]
 dt_income[, country_iso3 := NULL]
 
-# now merge with inequality data
+
+# 4 - Open controls data--------------------------------------------------
+dt_controls <- data.table(
+  read_csv(
+    file.path(data_dir, "control_variables_all_countries.csv")))
+
+colnames(dt_controls)
+
+setdiff(sort(unique(est_wide_full$country)), sort(unique(dt_controls$Code)))
+
+unique_country <- unique(dt_controls$Code)
+unique_country
+
+unique_country <- unique(est_wide_full$country)
+unique_country
+
+dt_controls[Code == "DEU", Code := "GER"]
+
+setnames(dt_controls, c("Code", "Country"), c("country", "country_name"))
+
+dt_controls <- dt_controls[, .(
+  country, country_name, year,
+  gdp_pc,
+  trade,
+  working_age_pop)]
+
+
+# 5 - merge dataset with inequality and control data ---------------------------
 panel_data <- merge(
   est_wide_full,
   dt_income,
@@ -233,19 +260,18 @@ panel_data <- merge(
   all.x = TRUE
 )
 
+panel_data <- merge(
+  panel_data,
+  dt_controls,
+  by = c("country", "year"),
+  all.x = TRUE
+)
+
+
+colnames(panel_data)
+
 setorder(panel_data, country, year)
 
-# controls data-----------------------------------
-dt_controls <- data.table(
-  read_csv(
-    file.path(data_dir, "control_variables_all_countries.csv")))
-
-setdiff(sort(unique(panel_data$country)), sort(unique(dt_controls$Code)))
-
-dt_controls[, country_iso3 := countrycode(Code, "iso2c", "iso3c")]
-dt_controls[country_iso3 == "DEU", country_iso3 := "GER"]
-dt_controls[, Code := country_iso3]
-dt_controls[, country_iso3 := NULL]
 
 # critical checks
 panel_data[, .N, by = .(country, year)][N > 1]
@@ -266,15 +292,20 @@ for (h in 0:5) {
   ]
 }
 
-# 4 - Estimate for Brazil -----------------------------------------
+
+panel_data[, log_gdp_pc := log(gdp_pc)]
+panel_data[, trade_frac := trade / 100]
+panel_data[, working_age_pop_frac := working_age_pop / 100]
+
+# 6 - Estimate for Brazil -----------------------------------------
 
 panel_br <- copy(panel_data[country == "BRA"])
 setorder(panel_br, year)
 
 # Choque PIT
-#panel_br[, shock := as.integer((PIT_b != 0) | (PIT_r != 0))]
+panel_br[, shock := as.integer((PIT_b != 0) | (PIT_r != 0))]
 #panel_br[, shock := as.integer((PIT_b != 0))]
-panel_br[, shock := as.integer((PIT_r != 0))]
+#panel_br[, shock := as.integer((PIT_r != 0))]
 
 #tendencia
 panel_br[, trend := year - min(year, na.rm = TRUE)]
@@ -328,3 +359,11 @@ ggplot(panel_br, aes(year, shock)) +
 
 
 panel_br[, fake_shock := shift(shock, 5)]
+
+
+specs <- list(
+  baseline = "shock + y_lag1 + y_lag2 + trend",
+  macro = "shock + y_lag1 + y_lag2 + trend + log_gdp_pc + trade_frac",
+  demo = "shock + y_lag1 + y_lag2 + trend + working_age_pop_frac",
+  full = "shock + y_lag1 + y_lag2 + trend + log_gdp_pc + trade_frac + working_age_pop_frac"
+)
