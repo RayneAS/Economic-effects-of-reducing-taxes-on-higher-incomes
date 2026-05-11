@@ -373,7 +373,7 @@ irf_all[, lower := beta - 1.96 * se]
 
 # 15 - Plot IRFs --------------------------------------------------------------
 
-ggplot(irf_all, aes(x = h, y = beta, color = spec, group = spec)) +
+fig1 <- ggplot(irf_all, aes(x = h, y = beta, color = spec, group = spec)) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
   geom_hline(yintercept = 0, linetype = "dashed") +
@@ -385,9 +385,16 @@ ggplot(irf_all, aes(x = h, y = beta, color = spec, group = spec)) +
   ) +
   theme_minimal()
 
+ggsave(
+  file.path(figure_dir, "LP_com_diferentes_controles_Brasil.jpg"),
+  plot = fig1,
+  height = 4,
+  width = 6
+)
 
 
-ggplot(irf_all, aes(x = h, y = beta)) +
+
+fig2 <- ggplot(irf_all, aes(x = h, y = beta)) +
   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
   geom_line(linewidth = 0.8) +
   geom_point(size = 2) +
@@ -400,9 +407,17 @@ ggplot(irf_all, aes(x = h, y = beta)) +
   ) +
   theme_minimal()
 
+
+ggsave(
+  file.path(figure_dir, "LP_por_especificação_Brasil.jpg"),
+  plot = fig2,
+  height = 4,
+  width = 6
+)
+
 # 16 - Plot shock years -------------------------------------------------------
 
-ggplot(panel_br, aes(year, shock)) +
+fig <-ggplot(panel_br, aes(year, shock)) +
   geom_col() +
   labs(
     title = "Anos com choque PIT - Brasil",
@@ -410,8 +425,17 @@ ggplot(panel_br, aes(year, shock)) +
     y = "Choque"
   )
 
+ggsave(
+  file.path(figure_dir, "anos_pit_choque_Brasil.jpg"),
+  plot = fig,
+  height = 4,
+  width = 6
+)
+
 
 # 17 - Placebo shock ----------------------------------------------------------
+
+#Define the placebo as a shock 5 years after the real schock
 
 panel_br[, fake_shock := shift(shock, 5)]
 panel_br[fake_shock == 1, .(year, shock, fake_shock)]
@@ -452,7 +476,7 @@ irf_compare <- rbind(
 )
 
 
-ggplot(irf_compare,
+fig3 <-ggplot(irf_compare,
        aes(x = h,
            y = beta,
            color = spec,
@@ -472,3 +496,89 @@ ggplot(irf_compare,
   ) +
   
   theme_minimal()
+
+
+ggsave(
+  file.path(figure_dir, "LP_por_placebo_baseline_Brasil.jpg"),
+  plot = fig3,
+  height = 4,
+  width = 6
+)
+
+# 18 - Panel LP baseline -------------------------------------------------------
+
+panel_lp <- copy(panel_data)
+setorder(panel_lp, country, year)
+
+# PIT shock dummy
+panel_lp[, shock := as.integer((PIT_b != 0) | (PIT_r != 0))]
+
+# Outcome lags
+panel_lp[, y_lag1 := shift(d_share_top0_01, 1), by = country]
+panel_lp[, y_lag2 := shift(d_share_top0_01, 2), by = country]
+
+# Cumulative dependent variable: y_{i,t+h} - y_{i,t-1}
+for (h in 0:5) {
+  panel_lp[, paste0("dep_h", h) :=
+             shift(d_share_top0_01, n = h, type = "lead") - y_lag1,
+           by = country]
+}
+
+# Check shock distribution
+panel_lp[shock == 1, .N, by = country][order(-N)]
+panel_lp[shock == 1, .N, by = year][order(year)]
+
+# Baseline panel LP
+horizons <- 0:5
+
+panel_results <- lapply(horizons, function(h) {
+  
+  dep_var <- paste0("dep_h", h)
+  
+  feols(
+    as.formula(
+      paste0(dep_var, " ~ shock + y_lag1 + y_lag2 | country + year")
+    ),
+    data = panel_lp,
+    cluster = ~ country
+  )
+})
+
+irf_panel <- data.table(
+  h = horizons,
+  beta = sapply(panel_results, function(x) coef(x)["shock"]),
+  se = sapply(panel_results, function(x) se(x)["shock"]),
+  nobs = sapply(panel_results, nobs)
+)
+
+irf_panel[, upper := beta + 1.96 * se]
+irf_panel[, lower := beta - 1.96 * se]
+
+irf_panel
+
+
+fig_panel_baseline <- ggplot(irf_panel, aes(x = h, y = beta)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 2) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Panel local projections - PIT reforms",
+    x = "Horizon in years",
+    y = expression(y[i*t+h] - y[i*t-1])
+  ) +
+  theme_minimal()
+
+fig_panel_baseline
+
+ggsave(
+  file.path(figure_dir, "LP_panel_baseline_PIT.jpg"),
+  plot = fig_panel_baseline,
+  height = 4,
+  width = 6
+)
+
+fwrite(
+  irf_panel,
+  file.path(figure_dir, "irf_panel_baseline_PIT.csv")
+)
