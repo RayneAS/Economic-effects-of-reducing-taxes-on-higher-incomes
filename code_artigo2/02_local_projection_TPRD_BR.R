@@ -582,3 +582,20 @@ fwrite(
   irf_panel,
   file.path(figure_dir, "irf_panel_baseline_PIT.csv")
 )
+
+
+
+fig5 <-ggplot(panel_lp, aes(year, shock)) +
+  geom_col() +
+  labs(
+    title = "Anos com choque PIT - Painel de Países",
+    x = "Ano",
+    y = "Choque"
+  )
+
+ggsave(
+  file.path(figure_dir, "anos_pit_choque_painel.jpg"),
+  plot = fig5,
+  height = 4,
+  width = 6
+)
