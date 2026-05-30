@@ -8,7 +8,8 @@ packages <- c(
   "data.table",
   "readr",
   "haven",
-  "Synth"
+  "Synth",
+  "ggplot2"
 )
 
 installed <- rownames(installed.packages())
@@ -35,6 +36,7 @@ if (user == "Rayne") {
 }
 
 code_dir <- file.path(working_dir, "code")
+figure_dir <- file.path(working_dir, "output_2")
 
 
 # 1 - Open Income database (World Inequality Database) -------------------------
@@ -127,6 +129,64 @@ dt_income[year < treat_year, .(
   last_pre_year  = max(year[!is.na(get(outcome_var))], na.rm = TRUE)
 ), by = Country]
 
+
+# 5 - Plot inequality measures ------------------------------------------------
+
+# Variables to plot
+ineq_vars <- c(
+  "d_share_p0_10",
+  "d_share_p90_100",
+  "d_share_p95_100",
+  "d_share_top1",
+  "d_share_top0_5",
+  "d_share_top0_1",
+  "d_share_top0_01",
+  "gini_post_tax"
+)
+
+
+# Loop over variables
+for (var in ineq_vars) {
+  
+  p <- ggplot(
+    dt_income,
+    aes(
+      x = year,
+      y = get(var),
+      color = Country
+    )
+  ) +
+    geom_line(size = 1) +
+    
+    geom_vline(
+      xintercept = 1996,
+      linetype = "dashed"
+    ) +
+    
+    labs(
+      title = paste("Evolution of", var),
+      x = "Year",
+      y = var,
+      color = "Country"
+    ) +
+    
+    theme_minimal() +
+    
+    theme(
+      plot.title = element_text(face = "bold"),
+      legend.position = "bottom"
+    )
+  
+  print(p)
+  
+  ggsave(
+    filename = paste0(var, ".png"),
+    plot = p,
+    path = figure_dir,
+    width = 10,
+    height = 6
+  )
+}
 
 # 5 - organize data to run SCM--------------------------------------------------
 
