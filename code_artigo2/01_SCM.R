@@ -32,12 +32,12 @@ user = "Rayne"
 if (user == "Rayne") {
   data_dir <- "C:/Users/Rayne/Documents/2026/projeto_taxacao_desigualdade/dados/controles"
 
-  working_dir <- "D:/rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
+  working_dir <- "C:/Users/Rayne/Documents/@github/Economic-effects-of-reducing-taxes-on-higher-incomes"
 }
 
 code_dir <- file.path(working_dir, "code")
-figure_dir <- file.path(working_dir, "output_2")
-
+figure_dir <- file.path(working_dir, "output2")
+figure_dir
 
 # 1 - Open Income database (World Inequality Database) -------------------------
 
@@ -164,7 +164,7 @@ for (var in ineq_vars) {
     ) +
     
     labs(
-      title = paste("Evolution of", var),
+      title = "",
       x = "Year",
       y = var,
       color = "Country"
