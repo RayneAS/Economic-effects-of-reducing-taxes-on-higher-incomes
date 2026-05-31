@@ -9,7 +9,8 @@ packages <- c(
   "readr",
   "haven",
   "Synth",
-  "ggplot2"
+  "ggplot2",
+  "xtable"
 )
 
 installed <- rownames(installed.packages())
@@ -106,7 +107,7 @@ dt_income[, .(
 
 # 4 - Main Outcome -------------------------------------------------------------
 
-outcome_var <- "gini_post_tax"
+outcome_var <- "d_share_top1"
 outcome_robust <- "d_share_top1"
 
 dt_income[, y := get(outcome_var)]
@@ -188,7 +189,7 @@ for (var in ineq_vars) {
   )
 }
 
-# 5 - organize data to run SCM--------------------------------------------------
+# 6 - organize data to run SCM--------------------------------------------------
 
 #create numeric country id
 dt_income[, country_id := .GRP, by = Country]
@@ -224,13 +225,18 @@ control_ids <- dt_income[
 
 control_ids
 
-# 6 - prepare data for model ---------------------------------------------------
+# 7 - prepare data for model ---------------------------------------------------
 
 dataprep.out <- dataprep(
   
   foo = as.data.frame(dt_income),
   
   predictors = c(
+    "d_share_top1",
+    "d_share_top0_5",
+    "d_share_top0_1",
+    "d_share_p90_100",
+    "d_share_p95_100",
     "gini_post_tax"
   ),
   
@@ -255,46 +261,139 @@ dataprep.out <- dataprep(
   time.plot = 1980:2023
 )
 
-# 7 - Run synthetic control ----------------------------------------------------
+# 8 - Run synthetic control ----------------------------------------------------
 
 synth.out <- synth(dataprep.out)
 
-# 8 - Predictor balance --------------------------------------------------------
+# 9 - Predictor balance --------------------------------------------------------
 
 synth.tab(
   dataprep.res = dataprep.out,
   synth.res = synth.out
 )
 
+
+# 9.1 - Synthetic control weights
+
+tab_weights <- synth.tab(
+  dataprep.res = dataprep.out,
+  synth.res = synth.out
+)$tab.w
+
+tab_weights <- data.table(tab_weights)
+
+tab_weights
+
+#rename columns
+setnames(
+  tab_weights,
+  old = c("w.weights", "unit.names"),
+  new = c("Weight", "Country")
+)
+
+#keep relevant columns
+tab_weights_export <- tab_weights[, .(Country, Weight)]
+
+#create latex table
+weights_tex <- xtable(
+  tab_weights_export,
+  caption = "Synthetic control weights for Brazil",
+  label = "tab:weights"
+)
+
+print(
+  weights_tex,
+  file = file.path(figure_dir, "synthetic_weights.tex"),
+  include.rownames = FALSE
+)
+
+
+# 9.2 - Predictor balance
+
+tab_balance <- synth.tab(
+  dataprep.res = dataprep.out,
+  synth.res = synth.out
+)$tab.pred
+
+tab_balance <- data.table(tab_balance)
+
+tab_balance[, predictor := c(
+  "Top 1% disposable income share",
+  "Top 0.5% disposable income share",
+  "Top 0.1% disposable income share",
+  "Top 10% disposable income share",
+  "Top 5% disposable income share",
+  "Disposable income Gini"
+)]
+
+setcolorder(tab_balance, c("predictor", "Treated", "Synthetic", "Sample Mean"))
+
+tab_balance
+
+#round values
+tab_balance_export <- copy(tab_balance)
+
+tab_balance_export[, c("Treated", "Synthetic", "Sample Mean") :=
+                     lapply(.SD, round, 3),
+                   .SDcols = c("Treated", "Synthetic", "Sample Mean")]
+
+#create latex table
+balance_tex <- xtable(
+  tab_balance_export,
+  caption = "Predictor balance before treatment",
+  label = "tab:balance"
+)
+
+print(
+  balance_tex,
+  file = file.path(figure_dir, "predictor_balance.tex"),
+  include.rownames = FALSE
+)
+
+
 # 10 - Path plot ---------------------------------------------------------------
+
+png(
+  filename = file.path(figure_dir, "path_plot_top1.png"),
+  width = 1200,
+  height = 800,
+  res = 150
+)
 
 path.plot(
   synth.res = synth.out,
   dataprep.res = dataprep.out,
-  Ylab = "gini_post_tax",
+  Ylab = "Top 1% disposable income share",
   Xlab = "Year",
   Main = "Brazil vs Synthetic Brazil"
 )
 
 abline(v = 1996, lty = 2)
 
+dev.off()
 
 # 11 - Gap plot ----------------------------------------------------------------
+
+png(
+  filename = file.path(figure_dir, "gap_plot_top1.png"),
+  width = 1200,
+  height = 800,
+  res = 150
+)
 
 gaps.plot(
   synth.res = synth.out,
   dataprep.res = dataprep.out,
-  Ylab = "Gap in gini_post_tax",
+  Ylab = "Gap in top 1% disposable income share",
   Xlab = "Year",
   Main = "Gap between Brazil and Synthetic Brazil"
 )
 
 abline(v = 1996, lty = 2)
 
+dev.off()
 
-dt_income[
-  Country == "Brazil",
-  .(year, pt_share_top0_5)
-]
-
-colnames(dt_income)
+# dt_income[
+#   Country == "Brazil",
+#   .(year, pt_share_top0_5)
+# ]
