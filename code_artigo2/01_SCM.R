@@ -393,7 +393,183 @@ abline(v = 1996, lty = 2)
 
 dev.off()
 
-# dt_income[
-#   Country == "Brazil",
-#   .(year, pt_share_top0_5)
-# ]
+# 12 - Estimate average post-treatment effect ---------------------------------
+
+# Observed Brazil
+Y_treated <- dataprep.out$Y1plot
+
+# Synthetic Brazil
+Y_synth <- dataprep.out$Y0plot %*% synth.out$solution.w
+
+# Years
+years <- dataprep.out$tag$time.plot
+
+# Organize results
+scm_effects <- data.table(
+  year = years,
+  treated = as.numeric(Y_treated),
+  synthetic = as.numeric(Y_synth)
+)
+
+scm_effects[, gap := treated - synthetic]
+scm_effects[, post := year >= treat_year]
+
+# Average post-treatment gap
+avg_gap_post <- scm_effects[post == TRUE, mean(gap, na.rm = TRUE)]
+
+# Baseline level: Brazil in 1995
+baseline_1995 <- scm_effects[year == 1995, treated]
+
+# Effect as % of 1995 baseline
+avg_gap_pct_1995 <- 100 * avg_gap_post / baseline_1995
+
+# Alternative baseline: average Brazil pre-treatment level
+baseline_pre_mean <- scm_effects[year < treat_year, mean(treated, na.rm = TRUE)]
+
+avg_gap_pct_pre_mean <- 100 * avg_gap_post / baseline_pre_mean
+
+# Print summary
+summary_effect <- data.table(
+  outcome = outcome_var,
+  avg_post_gap = avg_gap_post,
+  baseline_1995 = baseline_1995,
+  avg_gap_pct_1995 = avg_gap_pct_1995,
+  baseline_pre_mean = baseline_pre_mean,
+  avg_gap_pct_pre_mean = avg_gap_pct_pre_mean
+)
+
+summary_effect
+
+# 13 - In-time placebo --------------------------------------------------------
+
+fake_treat_year <- 1990
+
+dataprep.placebo.time <- dataprep(
+  foo = as.data.frame(dt_income),
+  
+  predictors = c(
+    "d_share_top1",
+    "d_share_top0_5",
+    "d_share_top0_1",
+    "d_share_p90_100",
+    "d_share_p95_100",
+    "gini_post_tax"
+  ),
+  
+  predictors.op = "mean",
+  dependent = "y",
+  
+  unit.variable = "country_id",
+  unit.names.variable = "Country",
+  time.variable = "year",
+  
+  treatment.identifier = treated_id,
+  controls.identifier = control_ids,
+  
+  time.predictors.prior = 1980:(fake_treat_year - 1),
+  time.optimize.ssr = 1980:(fake_treat_year - 1),
+  time.plot = 1980:1995
+)
+
+synth.placebo.time <- synth(dataprep.placebo.time)
+
+png(
+  filename = file.path(figure_dir, "placebo_time_1990_top1.png"),
+  width = 1200,
+  height = 800,
+  res = 150
+)
+
+gaps.plot(
+  synth.res = synth.placebo.time,
+  dataprep.res = dataprep.placebo.time,
+  Ylab = "Gap in top 1% disposable income share",
+  Xlab = "Year",
+  Main = "In-time placebo: fake treatment in 1990"
+)
+
+abline(v = fake_treat_year, lty = 2)
+
+dev.off()
+
+# 14 - In-space placebo -------------------------------------------------------
+
+placebo_results <- list()
+
+all_units <- dt_income[, unique(country_id)]
+
+for (placebo_id in all_units) {
+  
+  placebo_country <- dt_income[
+    country_id == placebo_id,
+    unique(Country)
+  ]
+  
+  placebo_controls <- all_units[all_units != placebo_id]
+  
+  dataprep.placebo <- dataprep(
+    foo = as.data.frame(dt_income),
+    
+    predictors = c(
+      "d_share_top1",
+      "d_share_top0_5",
+      "d_share_top0_1",
+      "d_share_p90_100",
+      "d_share_p95_100",
+      "gini_post_tax"
+    ),
+    
+    predictors.op = "mean",
+    dependent = "y",
+    
+    unit.variable = "country_id",
+    unit.names.variable = "Country",
+    time.variable = "year",
+    
+    treatment.identifier = placebo_id,
+    controls.identifier = placebo_controls,
+    
+    time.predictors.prior = 1980:1995,
+    time.optimize.ssr = 1980:1995,
+    time.plot = 1980:2023
+  )
+  
+  synth.placebo <- synth(dataprep.placebo)
+  
+  Y_treated_placebo <- dataprep.placebo$Y1plot
+  Y_synth_placebo <- dataprep.placebo$Y0plot %*% synth.placebo$solution.w
+  years_placebo <- dataprep.placebo$tag$time.plot
+  
+  placebo_results[[placebo_country]] <- data.table(
+    Country = placebo_country,
+    year = years_placebo,
+    treated = as.numeric(Y_treated_placebo),
+    synthetic = as.numeric(Y_synth_placebo),
+    gap = as.numeric(Y_treated_placebo - Y_synth_placebo)
+  )
+}
+
+dt_placebo <- rbindlist(placebo_results)
+
+p_placebo <- ggplot(
+  dt_placebo,
+  aes(x = year, y = gap, group = Country)
+) +
+  geom_line(aes(color = Country == "Brazil"), linewidth = 1) +
+  geom_vline(xintercept = 1996, linetype = "dashed") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    x = "Year",
+    y = "Gap in top 1% disposable income share",
+    title = "In-space placebo tests"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+ggsave(
+  filename = "placebo_space_top1.png",
+  plot = p_placebo,
+  path = figure_dir,
+  width = 10,
+  height = 6
+)
